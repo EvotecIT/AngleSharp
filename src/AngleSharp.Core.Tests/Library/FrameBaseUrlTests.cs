@@ -1,6 +1,7 @@
 namespace AngleSharp.Core.Tests.Library
 {
     using AngleSharp.Dom;
+    using AngleSharp.Core.Tests.Mocks;
     using AngleSharp.Html.Dom;
     using AngleSharp.Io;
     using NUnit.Framework;
@@ -47,6 +48,52 @@ namespace AngleSharp.Core.Tests.Library
             var clone = (IDocument)child.Clone(true);
             Assert.AreEqual(child.BaseUri, clone.BaseUri);
             Assert.AreEqual(child.Origin, clone.Origin);
+        }
+
+        [TestCase(false, false)]
+        [TestCase(false, true)]
+        [TestCase(true, false)]
+        [TestCase(true, true)]
+        public async Task FramesInitializeWhenTheirContainerIsAttached(bool srcdoc, bool fragment)
+        {
+            var context = BrowsingContext.New(Configuration.Default.WithDefaultLoader(new LoaderOptions { IsResourceLoadingEnabled = true }));
+            var parent = await context.OpenAsync(r => r.Address("https://example.test/start").Content("<base href='/first/'><body></body>"));
+            var wrapper = parent.CreateElement("div");
+            var frame = (IHtmlInlineFrameElement)parent.CreateElement("iframe");
+            if (srcdoc) frame.SetAttribute("srcdoc", "<p>Child</p>");
+            wrapper.AppendChild(frame);
+            Assert.IsNull(frame.ContentDocument);
+            parent.QuerySelector("base").SetAttribute("href", "/attached/");
+            INode inserted = wrapper;
+            if (fragment)
+            {
+                inserted = parent.CreateDocumentFragment();
+                inserted.AppendChild(wrapper);
+            }
+            parent.Body.AppendChild(inserted);
+            Assert.IsNotNull(frame.ContentDocument);
+            Assert.AreEqual(srcdoc ? "about:srcdoc" : "about:blank", frame.ContentDocument.Url);
+            Assert.AreEqual("https://example.test/attached/", frame.ContentDocument.BaseUri);
+        }
+
+        [TestCase(false)]
+        [TestCase(true)]
+        public async Task FrameDoesNotRequestAnAncestorDocument(bool indirect)
+        {
+            var requests = 0;
+            var requester = new MockRequester();
+            requester.BuildResponse(request =>
+            {
+                requests++;
+                // Bound the regression fixture, so a broken guard cannot recurse forever.
+                return requests < 3 ? "<iframe src='https://example.test/start#again'></iframe>" : "<p>Stop</p>";
+            });
+            var config = Configuration.Default.With(requester).WithDefaultLoader(new LoaderOptions { IsResourceLoadingEnabled = true });
+            var context = BrowsingContext.New(config);
+            await context.OpenAsync(r => r.Address("https://example.test/start").Content(indirect
+                ? "<iframe src='https://example.test/child'></iframe>"
+                : "<iframe src='https://example.test/start#again'></iframe>"));
+            Assert.AreEqual(indirect ? 1 : 0, requests);
         }
 
         [Test]

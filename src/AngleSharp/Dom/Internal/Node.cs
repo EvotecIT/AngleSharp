@@ -3,6 +3,7 @@ namespace AngleSharp.Dom
     using AngleSharp.Text;
     using System;
     using System.IO;
+    using System.Linq;
     using Common;
     using Html.Construction;
 
@@ -892,7 +893,12 @@ namespace AngleSharp.Dom
         protected virtual void NodeIsInserted(Node newNode)
         {
             OwningDocument?.RefreshBaseUrlForSubtree(newNode);
-            newNode.OnParentChanged();
+            // Insertion steps apply to every node in the inserted subtree. Take
+            // a snapshot because scripts invoked by these steps can mutate it.
+            foreach (var node in newNode.DescendantsAndSelf<Node>().ToArray())
+            {
+                node.OnParentChanged();
+            }
         }
 
         /// <summary>

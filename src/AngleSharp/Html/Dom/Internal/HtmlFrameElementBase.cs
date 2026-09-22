@@ -82,10 +82,7 @@ namespace AngleSharp.Html.Dom
             _isSetup = true;
 
             _context ??= NewChildContext();
-            if (this.GetRoot() is Document || this.GetOwnAttribute(AttributeNames.Src) != null || GetContentHtml() != null)
-            {
-                UpdateSource();
-            }
+            UpdateSource();
         }
 
         internal void UpdateSource()
@@ -105,15 +102,17 @@ namespace AngleSharp.Html.Dom
                 url = new Url("about:blank");
             }
 
-            if (this.GetRoot() is Document || rawSource != null || content != null)
+            if (content is null && IsAncestorDocument(url))
             {
-                var security = GetSecuritySettings();
-                if (_context is null || _context.Security != security)
-                {
-                    _context = NewChildContext(security);
-                }
-                this.Process(_request, url);
+                return;
             }
+
+            var security = GetSecuritySettings();
+            if (_context is null || _context.Security != security)
+            {
+                _context = NewChildContext(security);
+            }
+            this.Process(_request, url);
         }
 
         internal virtual Sandboxes GetSecuritySettings() => Sandboxes.None;
@@ -129,6 +128,27 @@ namespace AngleSharp.Html.Dom
             {
                 UpdateSource();
             }
+        }
+
+        private Boolean IsAncestorDocument(Url url)
+        {
+            // Local blank/srcdoc documents deliberately share their identity.
+            // For HTTP documents, fragments do not make self-embedding safe.
+            if (url.Scheme != "http" && url.Scheme != "https")
+            {
+                return false;
+            }
+
+            var target = new Url(url.Href) { Fragment = null };
+            for (var context = Context; context != null; context = context.Parent)
+            {
+                var document = context.Active;
+                if (document != null && target.Equals(new Url(document.Url) { Fragment = null }))
+                {
+                    return true;
+                }
+            }
+            return false;
         }
 
         private IBrowsingContext NewChildContext() => NewChildContext(GetSecuritySettings());
