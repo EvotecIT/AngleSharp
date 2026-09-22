@@ -27,6 +27,7 @@ namespace AngleSharp.Dom
         #region Fields
 
         private DocumentBaseUrl? _baseUrlState;
+        private DocumentAboutUrl? _aboutUrl;
         private readonly List<WeakReference> _attachedReferences;
         private readonly Queue<HtmlScriptElement> _loadingScripts;
         private readonly MutationHost _mutations;
@@ -885,7 +886,7 @@ namespace AngleSharp.Dom
         }
 
         /// <inheritdoc />
-        public String? Origin => _location.Origin;
+        public String? Origin => _aboutUrl?.Origin ?? _location.Origin;
 
         /// <inheritdoc />
         public String? SelectedStyleSheetSet
@@ -937,7 +938,9 @@ namespace AngleSharp.Dom
 
         #region Internal Properties
 
-        internal Url FallbackBaseUrl => BaseUrlOverride ?? DocumentUrl;
+        internal Url FallbackBaseUrl => BaseUrlOverride ??
+            (_aboutUrl is not null && (_aboutUrl.IsSrcdoc || DocumentAboutUrl.IsBlank(DocumentUrl))
+                ? _aboutUrl.BaseUrl : DocumentUrl);
 
         internal void RegisterBaseElement() => _baseUrlState ??= new DocumentBaseUrl(this);
 
@@ -1438,6 +1441,11 @@ namespace AngleSharp.Dom
             StatusCode = response.StatusCode;
             Referrer = response.Headers.GetOrDefault(HeaderNames.Referer, String.Empty);
             DocumentUri = response.Address!.Href;
+            if ((DocumentAboutUrl.IsBlank(DocumentUrl) || DocumentAboutUrl.IsSrcdocUrl(DocumentUrl)) &&
+                _context.Parent?.Active is { } creator)
+            {
+                _aboutUrl = new DocumentAboutUrl(creator, _context.Security, DocumentAboutUrl.IsSrcdocUrl(DocumentUrl));
+            }
             Cookie = response.Headers.GetOrDefault(HeaderNames.SetCookie, String.Empty);
             ImportAncestor = importAncestor;
             ReadyState = DocumentReadyState.Loading;
@@ -1834,6 +1842,7 @@ namespace AngleSharp.Dom
         {
             CloneNode(document, document, deep);
             document._ready = _ready;
+            document._aboutUrl = _aboutUrl;
             document.Referrer = Referrer;
             document._location.Href = _location.Href;
             document._quirksMode = _quirksMode;

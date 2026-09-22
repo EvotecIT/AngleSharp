@@ -42,8 +42,12 @@ namespace AngleSharp.Io.Processors
 
             if (contentHtml != null)
             {
-                var referer = _element.Owner.DocumentUri;
-                return ProcessResponse(contentHtml, referer);
+                return ProcessResponse(contentHtml, "about:srcdoc");
+            }
+
+            if (DocumentAboutUrl.IsBlank(request.Target))
+            {
+                return ProcessResponse(String.Empty, request.Target.Href);
             }
 
             return base.ProcessAsync(request);
@@ -61,11 +65,11 @@ namespace AngleSharp.Io.Processors
 
         #region Helpers
 
-        private Task ProcessResponse(String response, String referer)
+        private Task ProcessResponse(String response, String address)
         {
             var cancel = CancellationToken.None;
             var context = _element.NestedContext;
-            var task = context.OpenAsync(m => m.Content(response).Address(referer), cancel);
+            var task = context.OpenAsync(m => m.Content(response).Address(address), cancel);
             return WaitResponse(task);
         }
 

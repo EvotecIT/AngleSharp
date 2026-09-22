@@ -80,7 +80,7 @@ namespace AngleSharp.Html.Dom
             base.SetupElement();
 
             _context ??= NewChildContext();
-            if (this.GetOwnAttribute(AttributeNames.Src) != null)
+            if (this.GetRoot() is Document || this.GetOwnAttribute(AttributeNames.Src) != null || GetContentHtml() != null)
             {
                 UpdateSource();
             }
@@ -89,17 +89,21 @@ namespace AngleSharp.Html.Dom
         internal void UpdateSource()
         {
             var content = GetContentHtml();
-            var source = Source;
+            var rawSource = this.GetOwnAttribute(AttributeNames.Src);
+            var url = String.IsNullOrWhiteSpace(rawSource) ? new Url("about:blank") : this.HyperReference(Source!);
+            if (url is null || url.IsInvalid)
+            {
+                url = new Url("about:blank");
+            }
 
-            if ((source != null && source != Owner.DocumentUri) || content != null)
+            if (this.GetRoot() is Document || rawSource != null || content != null)
             {
                 var security = GetSecuritySettings();
                 if (_context is null || _context.Security != security)
                 {
                     _context = NewChildContext(security);
                 }
-                var url = this.HyperReference(source!);
-                this.Process(_request, url!);
+                this.Process(_request, url);
             }
         }
 
@@ -108,6 +112,15 @@ namespace AngleSharp.Html.Dom
         #endregion
 
         #region Helpers
+
+        protected override void OnParentChanged()
+        {
+            base.OnParentChanged();
+            if (this.GetRoot() is Document && _context?.Active is null && this.GetOwnAttribute(AttributeNames.Src) is null && GetContentHtml() is null)
+            {
+                UpdateSource();
+            }
+        }
 
         private IBrowsingContext NewChildContext() => NewChildContext(GetSecuritySettings());
 

@@ -88,16 +88,6 @@ namespace AngleSharp.Html.Dom
             return ContentHtml!;
         }
 
-        internal override void SetupElement()
-        {
-            base.SetupElement();
-            
-            if (this.GetOwnAttribute(AttributeNames.SrcDoc) != null)
-            {
-                UpdateSource();
-            }
-        }
-
         internal void UpdateSandbox()
         {
             _sandbox?.Update(this.GetOwnAttribute(AttributeNames.Sandbox));
