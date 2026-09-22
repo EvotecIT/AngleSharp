@@ -15,6 +15,7 @@ namespace AngleSharp.Html.Dom
 
         private IBrowsingContext? _context;
         private FrameRequestProcessor _request;
+        private Boolean _isSetup;
 
         #endregion
 
@@ -78,6 +79,7 @@ namespace AngleSharp.Html.Dom
         internal override void SetupElement()
         {
             base.SetupElement();
+            _isSetup = true;
 
             _context ??= NewChildContext();
             if (this.GetRoot() is Document || this.GetOwnAttribute(AttributeNames.Src) != null || GetContentHtml() != null)
@@ -116,7 +118,7 @@ namespace AngleSharp.Html.Dom
         protected override void OnParentChanged()
         {
             base.OnParentChanged();
-            if (this.GetRoot() is Document && _context?.Active is null && this.GetOwnAttribute(AttributeNames.Src) is null && GetContentHtml() is null)
+            if (_isSetup && this.GetRoot() is Document && _context?.Active is null && this.GetOwnAttribute(AttributeNames.Src) is null && GetContentHtml() is null)
             {
                 UpdateSource();
             }
