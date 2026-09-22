@@ -22,6 +22,7 @@ namespace AngleSharp.Io.Processors
         private IScriptingService? _engine;
         private ScriptOptions? _options;
         private String? _inlineSource;
+        private CancellationToken _inputLifetime;
 
         #endregion
 
@@ -73,6 +74,30 @@ namespace AngleSharp.Io.Processors
 
         public async Task RunAsync(CancellationToken cancel)
         {
+            using var lifetime = CancellationTokenSource.CreateLinkedTokenSource(cancel, _inputLifetime);
+            using var registration = lifetime.Token.Register(() => Download?.Cancel());
+            try
+            {
+                await RunCoreAsync(lifetime.Token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (lifetime.IsCancellationRequested)
+            {
+                // Reopening the document abandons the old input, not the realm.
+            }
+            finally
+            {
+                if (lifetime.IsCancellationRequested)
+                {
+                    _response?.Dispose();
+                    _response = null;
+                    _inlineSource = null;
+                }
+            }
+        }
+
+        private async Task RunCoreAsync(CancellationToken cancel)
+        {
+            cancel.ThrowIfCancellationRequested();
             var download = Download;
 
             if (download != null)
@@ -81,6 +106,10 @@ namespace AngleSharp.Io.Processors
                 {
                     _response = await download.Task.ConfigureAwait(false);
                 }
+                catch (OperationCanceledException) when (cancel.IsCancellationRequested)
+                {
+                    return;
+                }
                 catch (Exception ex)
                 {
                     _context.TrackError(ex);
@@ -88,17 +117,19 @@ namespace AngleSharp.Io.Processors
                 }
             }
 
+            cancel.ThrowIfCancellationRequested();
             if (_response != null)
             {
                 var response = _response;
                 try
                 {
-                    var cancelled = await _document.QueueTaskAsync(FireBeforeScriptExecuteEvent).ConfigureAwait(false);
+                    var cancelled = await _document.QueueTaskAsync(_ => cancel.IsCancellationRequested || FireBeforeScriptExecuteEvent(cancel)).ConfigureAwait(false);
                     if (cancelled)
                     {
                         return;
                     }
 
+                    cancel.ThrowIfCancellationRequested();
                     var options = _options ?? CreateOptions();
                     var insert = _script.IsParserBlocking ? _document.Source.Index : -1;
                     var writeVersion = _document.ParserWriteVersion;
@@ -112,6 +143,10 @@ namespace AngleSharp.Io.Processors
                     try
                     {
                         await _engine!.EvaluateScriptAsync(response, options, cancel).ConfigureAwait(false);
+                    }
+                    catch (OperationCanceledException) when (cancel.IsCancellationRequested)
+                    {
+                        return;
                     }
                     catch (Exception ex)
                     {
@@ -162,7 +197,8 @@ namespace AngleSharp.Io.Processors
                 return false;
             }
 
-            if (FireBeforeScriptExecuteEvent(CancellationToken.None))
+            if (_inputLifetime.IsCancellationRequested || FireBeforeScriptExecuteEvent(CancellationToken.None)
+                || _inputLifetime.IsCancellationRequested)
             {
                 _response.Dispose();
                 _response = null;
@@ -225,6 +261,7 @@ namespace AngleSharp.Io.Processors
 
         private ScriptOptions CreateOptions()
         {
+            _inputLifetime = _document.InputLifetime;
             var hasIntegrity = _script.HasAttribute(AttributeNames.Integrity);
             var integrity = hasIntegrity ? _script.GetOwnAttribute(AttributeNames.Integrity) : null;
             return new(_document, _document.Loop!)

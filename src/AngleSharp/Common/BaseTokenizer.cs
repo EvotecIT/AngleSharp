@@ -9,7 +9,7 @@ namespace AngleSharp.Common
     /// <summary>
     /// Common methods and variables of all tokenizers.
     /// </summary>
-    public abstract class BaseTokenizer: IDisposable
+    public abstract partial class BaseTokenizer: IDisposable
     {
         #region Fields
 
@@ -21,8 +21,8 @@ namespace AngleSharp.Common
 
         private StringBuilder _stringBuilder;
         private IMutableCharBuffer _charBuffer;
-        private readonly ArrayPoolBuffer? _apb;
-        private readonly StringBuilderBuffer? _sbb;
+        private ArrayPoolBuffer? _apb;
+        private StringBuilderBuffer? _sbb;
 
         private UInt16 _column;
         private UInt16 _row;
@@ -223,6 +223,7 @@ namespace AngleSharp.Common
         /// <returns>The upcoming string.</returns>
         protected String PeekString(Int32 length)
         {
+            RequireInput(length);
             var mark = _source.Index;
             _source.Index--;
             var content = _source.ReadCharacters(length);
@@ -237,6 +238,7 @@ namespace AngleSharp.Common
         /// <returns>The upcoming string.</returns>
         protected StringOrMemory PeekStringFast(Int32 length)
         {
+            RequireInput(length);
             var mark = _source.Index;
             _source.Index--;
             var content = _source.ReadMemory(length);
@@ -576,6 +578,11 @@ namespace AngleSharp.Common
                 _normalized = false;
                 return p;
             }
+            else if (AtInputBoundary)
+            {
+                _pendingInputLineFeed = true;
+                _normalized = false;
+            }
             else if (ReadCharFromSource() != Symbols.LineFeed)
             {
                 _source.Index--;
@@ -608,7 +615,19 @@ namespace AngleSharp.Common
             return Symbols.LineFeed;
         }
 
-        private Char ReadCharFromSource() => _source.ReadCharacter();
+        private Char ReadCharFromSource()
+        {
+            if (_pendingInputLineFeed && _source.Index < AvailableInputLength)
+            {
+                _pendingInputLineFeed = false;
+                if (_source[_source.Index] == Symbols.LineFeed) _source.Index++;
+            }
+            if (AtInputBoundary)
+            {
+                throw new IncompleteInputException();
+            }
+            return _source.ReadCharacter();
+        }
 
         #endregion
     }

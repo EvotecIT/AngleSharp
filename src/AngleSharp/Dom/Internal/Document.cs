@@ -22,7 +22,7 @@ namespace AngleSharp.Dom
     /// <summary>
     /// Represents a document node.
     /// </summary>
-    public abstract class Document : Node, IDocument, IConstructableDocument
+    public abstract partial class Document : Node, IDocument, IConstructableDocument
     {
         #region Fields
 
@@ -38,7 +38,7 @@ namespace AngleSharp.Dom
         private readonly Window _view;
         private readonly IResourceLoader? _loader;
         private readonly Location _location;
-        private readonly TextSource _source;
+        private TextSource _source;
         private readonly Object _importedUrisLock = new();
         private readonly Object _scriptBlockingStylesLock = new();
         private readonly List<(Task Task, Func<Boolean> IsBlocking)> _scriptBlockingStyles;
@@ -1110,6 +1110,8 @@ namespace AngleSharp.Dom
         public virtual void Dispose()
         {
             Interlocked.Exchange(ref _disposed, 1);
+            ((IConstructableDocument)this).Builder?.Dispose();
+            RetireInputLifetime();
             //Important to fix #45
             Clear();
             _loop?.CancelAll();
@@ -1118,7 +1120,6 @@ namespace AngleSharp.Dom
             SignalScriptBlockingStylesChanged();
             _source.Dispose();
             _view?.Dispose();
-            ((IConstructableDocument)this).Builder?.Dispose();
         }
 
         /// <inheritdoc />
@@ -1175,10 +1176,15 @@ namespace AngleSharp.Dom
                 return this;
             }
 
+            // Abandon parsing before cancellation can synchronously resume it.
+            ((IConstructableDocument)this).Builder?.Dispose();
+            RetireInputLifetime();
+            _loadingScripts.Clear();
+            _attachedReferences.RemoveAll(reference => reference.Target is Task);
+
             // Opening an input stream keeps this document and its window alive.
             // In particular, it is not a navigation and must not dispatch unload
             // events or cancel the window's queued tasks.
-            _source.CurrentEncoding = TextEncoding.Utf8;
             var origin = Origin;
             DocumentListenerReset.Clear(this);
             _view.RemoveEventListeners();
@@ -1196,7 +1202,12 @@ namespace AngleSharp.Dom
             _salvageable = true;
             _ready = DocumentReadyState.Loading;
             _quirksMode = QuirksMode.Off;
-            _source.Index = _source.Length;
+            _source.Dispose();
+            _source = new TextSource(String.Empty);
+            var options = (_context.GetService<IHtmlParser>() as HtmlParser)?.Options
+                ?? new HtmlParserOptions { IsScripting = _context.IsScripting() };
+            var builder = new HtmlDomBuilder<Document, Element>(HtmlDomConstructionFactory.Instance, this, emitWhitespaceTextNodes: true);
+            builder.StartInput(options);
             return this;
         }
 
@@ -1205,7 +1216,11 @@ namespace AngleSharp.Dom
 
         void IDocument.Close()
         {
-            if (IsLoading)
+            if (((IConstructableDocument)this).Builder is IHtmlInputStream { IsScriptCreated: true } input)
+            {
+                input.CloseInput();
+            }
+            else if (IsLoading)
             {
                 _ = FinishLoadingAsync().ContinueWith(task => _context.TrackError(task.Exception!.GetBaseException()),
                     CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
@@ -1536,52 +1551,6 @@ namespace AngleSharp.Dom
 
                 previous?.Fire<FocusEvent>(m => m.Init(EventNames.Blur, false, false));
                 element?.Fire<FocusEvent>(m => m.Init(EventNames.Focus, false, false));
-            }
-        }
-
-        /// <summary>
-        /// Finishes writing to a document.
-        /// </summary>
-        internal async Task FinishLoadingAsync()
-        {
-            await this.QueueTaskAsync(_ => ReadyState = DocumentReadyState.Interactive).ConfigureAwait(false);
-
-            while (_loadingScripts.Count > 0)
-            {
-                await this.WaitForReadyAsync().ConfigureAwait(false);
-                await _loadingScripts.Dequeue().RunAsync(CancellationToken.None).ConfigureAwait(false);
-            }
-
-            await this.QueueTaskAsync(_ => this.FireSimpleEvent(EventNames.DomContentLoaded, bubble: true)).ConfigureAwait(false);
-
-            while (true)
-            {
-                var tasks = await this.QueueTaskAsync(_ =>
-                {
-                    var pending = GetAttachedReferences<Task>().Where(task => !task.IsCompleted).ToArray();
-                    if (pending.Length == 0)
-                    {
-                        // Check blockers and finish in one turn; another task
-                        // must not insert a load blocker between these steps.
-                        ReadyState = DocumentReadyState.Complete;
-                        _view.FireSimpleEvent(EventNames.Load);
-                        if (IsInBrowsingContext && !_shown)
-                        {
-                            _shown = true;
-                            this.Fire<PageTransitionEvent>(ev => ev.Init(EventNames.PageShow, false, false, false), _view);
-                        }
-                    }
-                    return pending;
-                }).ConfigureAwait(false);
-                if (tasks.Length == 0) break;
-                await Task.WhenAll(tasks).ConfigureAwait(false);
-            }
-
-            this.QueueTask(EmptyAppCache);
-
-            if (IsToBePrinted)
-            {
-                await PrintAsync().ConfigureAwait(false);
             }
         }
 

@@ -18,7 +18,7 @@ namespace AngleSharp.Html.Parser
     /// 8.2.5 Tree construction, on the following page:
     /// http://www.w3.org/html/wg/drafts/html/master/syntax.html
     /// </summary>
-    class HtmlDomBuilder<TDocument, TElement> : IDisposable, IHtmlParserReentry
+    partial class HtmlDomBuilder<TDocument, TElement> : IDisposable, IHtmlParserReentry
         where TElement : class, IConstructableElement
         where TDocument : class, IConstructableDocument
     {
@@ -302,6 +302,7 @@ namespace AngleSharp.Html.Parser
 
         private Boolean WriteCore(String content)
         {
+            if (_scriptCreatedInput) return WriteInput(content);
             if (_ended || _insertionPoints.Count == 0)
             {
                 return false;
@@ -491,6 +492,11 @@ namespace AngleSharp.Html.Parser
         /// <param name="token">The token to consume.</param>
         private void Consume(ref StructHtmlToken token)
         {
+            if (_skipInputNewLine)
+            {
+                _skipInputNewLine = false;
+                if (token.Type == HtmlTokenType.Character) token.RemoveNewLine();
+            }
             var node = AdjustedCurrentNode;
             
             if (node is null || token.Type == HtmlTokenType.EndOfFile ||
@@ -4174,7 +4180,8 @@ namespace AngleSharp.Html.Parser
                     {
                         if (_reentryDepth > 0)
                         {
-                            if (!script.RunSynchronously())
+                            var ready = _document.WaitForReadyAsync(CancellationToken.None);
+                            if (ready.Status != TaskStatus.RanToCompletion || !script.RunSynchronously())
                             {
                                 _pendingReentrantScript = script;
                                 _reentryPaused = true;
@@ -4196,6 +4203,7 @@ namespace AngleSharp.Html.Parser
         private async Task RunScript(IConstructableScriptElement script)
         {
             await _document.WaitForReadyAsync(CancellationToken.None).ConfigureAwait(false);
+            if (_ended) return;
             await script.RunAsync(CancellationToken.None).ConfigureAwait(false);
         }
 
@@ -4277,6 +4285,11 @@ namespace AngleSharp.Html.Parser
         /// </summary>
         private void PreventNewLine()
         {
+            if (_scriptCreatedInput)
+            {
+                _skipInputNewLine = true;
+                return;
+            }
             var temp = _tokenizer.GetStructToken();
 
             if (temp.Type == HtmlTokenType.Character)
@@ -4687,6 +4700,7 @@ namespace AngleSharp.Html.Parser
 
         public void Dispose()
         {
+            _ended = true;
             _tokenizer.Dispose();
         }
     }

@@ -46,7 +46,7 @@ namespace AngleSharp.Html.Parser
     /// Performs the tokenization of the source code. Follows the tokenization algorithm at:
     /// http://www.w3.org/html/wg/drafts/html/master/syntax.html
     /// </summary>
-    public sealed class HtmlTokenizer : BaseTokenizer
+    public sealed partial class HtmlTokenizer : BaseTokenizer
     {
         #region Fields
 
@@ -242,6 +242,11 @@ namespace AngleSharp.Html.Parser
 
         internal void RaiseErrorOccurred(HtmlParseError code, TextPosition position)
         {
+            if (_inputErrors is not null)
+            {
+                _inputErrors.Add((code, position));
+                return;
+            }
             var handler = Error;
 
             if (IsStrictMode)
@@ -285,7 +290,13 @@ namespace AngleSharp.Html.Parser
                         return ref NewCharacter();
 
                     case Symbols.Ampersand:
+                        if (IsInputOpen && CharBuffer.Length > 0)
+                        {
+                            Back();
+                            return ref SkipDataText ? ref NewSkippedContent() : ref NewCharacter();
+                        }
                         AppendCharacterReference(GetNext());
+                        if (AtInputBoundary) return ref SkipDataText ? ref NewSkippedContent() : ref NewCharacter();
                         break;
 
                     case Symbols.Null:
@@ -295,6 +306,7 @@ namespace AngleSharp.Html.Parser
                     default:
                         Append(c);
                         // Try to scan ahead and bulk-append plain text
+                        if (AtInputBoundary) return ref SkipDataText ? ref NewSkippedContent() : ref NewCharacter();
                         c = ScanDataText();
                         continue;
                 }
@@ -336,6 +348,7 @@ namespace AngleSharp.Html.Parser
                         break;
                 }
 
+                if (AtInputBoundary) return ref SkipPlaintext ? ref NewSkippedContent() : ref NewCharacter();
                 c = GetNext();
             }
         }
@@ -360,7 +373,13 @@ namespace AngleSharp.Html.Parser
                 switch (c)
                 {
                     case Symbols.Ampersand:
+                        if (IsInputOpen && CharBuffer.Length > 0)
+                        {
+                            Back();
+                            return ref SkipRCDataText ? ref NewSkippedContent() : ref NewCharacter();
+                        }
                         AppendCharacterReference(GetNext());
+                        if (AtInputBoundary) return ref SkipRCDataText ? ref NewSkippedContent() : ref NewCharacter();
                         break;
 
                     case Symbols.LessThan:
@@ -382,6 +401,7 @@ namespace AngleSharp.Html.Parser
                         break;
                 }
 
+                if (AtInputBoundary) return ref SkipRCDataText ? ref NewSkippedContent() : ref NewCharacter();
                 c = GetNext();
             }
         }
@@ -488,6 +508,7 @@ namespace AngleSharp.Html.Parser
                         break;
                 }
 
+                if (AtInputBoundary) return ref SkipRawText ? ref NewSkippedContent() : ref NewCharacter();
                 c = GetNext();
             }
         }
@@ -2272,7 +2293,8 @@ namespace AngleSharp.Html.Parser
         {
             var length = _lastStartTag.Length;
             var scriptLength = TagNames.Script.Length;
-            var state = ScriptState.Normal;
+            var state = _inputScriptState;
+            _inputScriptState = ScriptState.Normal;
             var offset = 0;
 
             while (true)
@@ -2289,6 +2311,11 @@ namespace AngleSharp.Html.Parser
                                 break;
 
                             case Symbols.LessThan:
+                                if (IsInputOpen && CharBuffer.Length > 0)
+                                {
+                                    Back();
+                                    return ref NewInputScriptChunk(ScriptState.Normal);
+                                }
                                 Append(Symbols.LessThan);
                                 state = ScriptState.OpenTag;
                                 continue;
@@ -2307,6 +2334,7 @@ namespace AngleSharp.Html.Parser
                                 break;
                         }
 
+                        if (AtInputBoundary) return ref NewInputScriptChunk(ScriptState.Normal);
                         c = GetNext();
                         break;
                     }
@@ -2439,6 +2467,11 @@ namespace AngleSharp.Html.Parser
                                 state = ScriptState.EscapedDash;
                                 continue;
                             case Symbols.LessThan:
+                                if (IsInputOpen && CharBuffer.Length > 0)
+                                {
+                                    Back();
+                                    return ref NewInputScriptChunk(ScriptState.Escaped);
+                                }
                                 c = GetNext();
                                 state = ScriptState.EscapedOpenTag;
                                 continue;
@@ -2457,6 +2490,7 @@ namespace AngleSharp.Html.Parser
                                 break;
                         }
 
+                        if (AtInputBoundary) return ref NewInputScriptChunk(ScriptState.Escaped);
                         c = GetNext();
                         break;
                     }
@@ -2649,6 +2683,11 @@ namespace AngleSharp.Html.Parser
                                 continue;
 
                             case Symbols.LessThan:
+                                if (IsInputOpen && CharBuffer.Length > 0)
+                                {
+                                    Back();
+                                    return ref NewInputScriptChunk(ScriptState.EscapedDouble);
+                                }
                                 Append(Symbols.LessThan);
                                 c = GetNext();
                                 state = ScriptState.EscapedDoubleOpenTag;
@@ -2672,6 +2711,7 @@ namespace AngleSharp.Html.Parser
                         }
 
                         Append(c);
+                        if (AtInputBoundary) return ref NewInputScriptChunk(ScriptState.EscapedDouble);
                         c = GetNext();
                         break;
                     }
