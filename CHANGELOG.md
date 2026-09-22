@@ -2,6 +2,7 @@
 
 Development fork.
 
+- Corrected frozen document base URLs and base href reflection across DOM mutations, adoption and cloning.
 - Corrected native Unloading subscriptions to use the beforeunload event name.
 
 - Added runtime integration services and DOM, lifecycle, sandbox, and integrity corrections; see FORK.md.

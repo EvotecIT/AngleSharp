@@ -8,6 +8,10 @@ The maintained changes cover:
 
 - DOM ownership, detached-node comparisons, dataset names, event dispatch, and mutation observation.
 - Native `Unloading` handlers subscribe to the standard `beforeunload` event name.
+- The first connected HTML base element owns the frozen document base URL. DOM
+  insertion, removal, attribute changes, adoption and cloning update that state;
+  invalid, data and JavaScript bases freeze the fallback URL. Detached, later,
+  template-content and foreign elements cannot replace the active base.
 - Optional parser synchronization, mutation microtask scheduling, and synchronous mutation notification services.
 - Reentrant `document.write`, script preparation and ordering, stylesheet blockers, and document readiness.
 - Frame sandbox propagation and integrity metadata captured at resource preparation.
