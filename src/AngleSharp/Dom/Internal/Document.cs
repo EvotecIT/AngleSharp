@@ -36,6 +36,13 @@ namespace AngleSharp.Dom
         private readonly Location _location;
         private readonly TextSource _source;
         private readonly Object _importedUrisLock = new();
+        private readonly Object _scriptBlockingStylesLock = new();
+        private readonly List<(Task Task, Func<Boolean> IsBlocking)> _scriptBlockingStyles;
+        private TaskCompletionSource<Boolean> _scriptBlockingStylesChanged;
+        private Task _orderedScriptTail;
+        private Int32 _parserWriteVersion;
+        private Int32 _ignoreDestructiveWrites;
+        private Int32 _disposed;
         private IAttributeObserver[]? _attributeObservers;
 
         private QuirksMode _quirksMode;
@@ -486,6 +493,11 @@ namespace AngleSharp.Dom
 
         /// <inheritdoc />
         public Document(IBrowsingContext context, TextSource source)
+            : this(context, source, null)
+        {
+        }
+
+        internal Document(IBrowsingContext context, TextSource source, MutationHost? mutationHost)
             : base(null, "#document", NodeType.Document)
         {
             Referrer = String.Empty;
@@ -502,12 +514,15 @@ namespace AngleSharp.Dom
             _sandbox = Sandboxes.None;
             _quirksMode = QuirksMode.Off;
             _loadingScripts = new Queue<HtmlScriptElement>();
+            _scriptBlockingStyles = new List<(Task Task, Func<Boolean> IsBlocking)>();
+            _scriptBlockingStylesChanged = NewScriptBlockingStylesChanged();
+            _orderedScriptTail = Task.CompletedTask;
             _location = new Location("about:blank");
             _location.Changed += LocationChanged;
             _view = new Window(this);
             _loader = context.GetService<IResourceLoader>();
             _loop = context.GetService<IEventLoop>()!;
-            _mutations = new MutationHost(_loop);
+            _mutations = mutationHost ?? new MutationHost(_loop);
             _statusCode = HttpStatusCode.OK;
         }
 
@@ -597,6 +612,16 @@ namespace AngleSharp.Dom
 
         /// <inheritdoc />
         public IHtmlScriptElement? CurrentScript { get; internal set; }
+
+        internal Int32 ParserWriteVersion => _parserWriteVersion;
+
+        internal Boolean EnterParserScript() => (((IConstructableDocument)this).Builder as IHtmlParserReentry)?.EnterScript() == true;
+
+        internal void ExitParserScript() => (((IConstructableDocument)this).Builder as IHtmlParserReentry)?.ExitScript();
+
+        internal void EnterIgnoreDestructiveWrites() => Interlocked.Increment(ref _ignoreDestructiveWrites);
+
+        internal void ExitIgnoreDestructiveWrites() => Interlocked.Decrement(ref _ignoreDestructiveWrites);
 
         /// <inheritdoc />
         public IImplementation Implementation => _implementation ??= new DomImplementation(this);
@@ -918,7 +943,7 @@ namespace AngleSharp.Dom
         /// mutation record is an allocation, and without an observer it is built only to be thrown
         /// away, so the mutating paths check this before constructing one.
         /// </summary>
-        internal Boolean HasMutationObservers => _mutations.HasObservers;
+        internal Boolean HasMutationObservers => _mutations.HasObservers || Context.GetService<IDomMutationListener>() is not null;
 
         internal QuirksMode QuirksMode
         {
@@ -935,6 +960,119 @@ namespace AngleSharp.Dom
         internal void AddScript(HtmlScriptElement script)
         {
             _loadingScripts.Enqueue(script);
+        }
+
+        internal Task RunOrderedScriptAsync(HtmlScriptElement script, CancellationToken token)
+        {
+            Task previous = _orderedScriptTail;
+            Task current = ContinueOrderedScriptAsync(previous, script, token);
+            _orderedScriptTail = current;
+            return current;
+        }
+
+        internal void AddScriptBlockingStyle(Task task, Func<Boolean> isBlocking)
+        {
+            if (task.IsCompleted)
+            {
+                return;
+            }
+
+            lock (_scriptBlockingStylesLock)
+            {
+                if (Volatile.Read(ref _disposed) != 0)
+                {
+                    return;
+                }
+                _scriptBlockingStyles.RemoveAll(item => item.Task.IsCompleted);
+                _scriptBlockingStyles.Add((task, isBlocking));
+            }
+            SignalScriptBlockingStylesChanged();
+        }
+
+        internal async Task WaitForScriptBlockingStylesAsync()
+        {
+            var syncRoot = Context.GetService<IDomSynchronization>()?.SyncRoot;
+            while (true)
+            {
+                Task[] pending;
+                Task changed;
+                if (syncRoot is null)
+                {
+                    CapturePending(out pending, out changed);
+                }
+                else
+                {
+                    lock (syncRoot) CapturePending(out pending, out changed);
+                }
+
+                if (pending.Length == 0)
+                {
+                    return;
+                }
+
+                var all = Task.WhenAll(pending);
+                if (await Task.WhenAny(all, changed).ConfigureAwait(false) == all)
+                {
+                    await all.ConfigureAwait(false);
+                }
+            }
+
+            void CapturePending(out Task[] pending, out Task changed)
+            {
+                lock (_scriptBlockingStylesLock)
+                {
+                    if (Volatile.Read(ref _disposed) != 0)
+                    {
+                        throw new ObjectDisposedException(GetType().FullName);
+                    }
+                    _scriptBlockingStyles.RemoveAll(item => item.Task.IsCompleted);
+                    pending = _scriptBlockingStyles
+                        .Where(item => item.IsBlocking())
+                        .Select(item => item.Task)
+                        .ToArray();
+                    changed = _scriptBlockingStylesChanged.Task;
+                }
+            }
+        }
+
+        internal void SignalScriptBlockingStylesChanged()
+        {
+            TaskCompletionSource<Boolean> changed;
+            lock (_scriptBlockingStylesLock)
+            {
+                changed = _scriptBlockingStylesChanged;
+                _scriptBlockingStylesChanged = NewScriptBlockingStylesChanged();
+            }
+            changed.TrySetResult(true);
+        }
+
+        private static TaskCompletionSource<Boolean> NewScriptBlockingStylesChanged() =>
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        internal Boolean IsScriptBlockingMedia(String? media)
+        {
+            var text = media ?? String.Empty;
+            var evaluator = Context.GetService<AngleSharp.Css.IScriptBlockingStyleSheetEvaluator>();
+            if (evaluator != null)
+            {
+                return evaluator.Matches(text);
+            }
+
+            text = text.Trim();
+            return text.Length == 0 || text.Isi("all") || text.Isi("screen");
+        }
+
+        private static async Task ContinueOrderedScriptAsync(Task previous, HtmlScriptElement script, CancellationToken token)
+        {
+            try
+            {
+                await previous.ConfigureAwait(false);
+            }
+            catch
+            {
+                // A failed predecessor must not suppress later ordered scripts.
+            }
+            await script.RunAsync(token).ConfigureAwait(false);
         }
 
         internal Boolean IsInBrowsingContext => _context.Active != null;
@@ -955,10 +1093,13 @@ namespace AngleSharp.Dom
         /// <inheritdoc />
         public virtual void Dispose()
         {
+            Interlocked.Exchange(ref _disposed, 1);
             //Important to fix #45
             Clear();
             _loop?.CancelAll();
             _loadingScripts.Clear();
+            lock (_scriptBlockingStylesLock) _scriptBlockingStyles.Clear();
+            SignalScriptBlockingStylesChanged();
             _source.Dispose();
             _view?.Dispose();
             ((IConstructableDocument)this).Builder?.Dispose();
@@ -1062,7 +1203,8 @@ namespace AngleSharp.Dom
         {
             if (IsLoading)
             {
-                FinishLoadingAsync().Wait();
+                _ = FinishLoadingAsync().ContinueWith(task => _context.TrackError(task.Exception!.GetBaseException()),
+                    CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
             }
         }
 
@@ -1077,9 +1219,19 @@ namespace AngleSharp.Dom
             }
             else
             {
-                if (_source is ITextSource wts)
+                var source = content ?? String.Empty;
+                var builder = ((IConstructableDocument)this).Builder;
+                if (builder is IHtmlParserReentry parser && parser.Write(source))
                 {
-                    wts.InsertText(content);
+                    _parserWriteVersion++;
+                }
+                else if (Volatile.Read(ref _ignoreDestructiveWrites) > 0)
+                {
+                    return;
+                }
+                else if (_source is ITextSource wts)
+                {
+                    wts.InsertText(source);
                 }
             }
         }
@@ -1103,7 +1255,7 @@ namespace AngleSharp.Dom
                 throw new DomException(DomError.NotSupported);
             }
 
-            return externalNode.Clone(deep);
+            return externalNode is Node node ? node.Clone(this, deep) : externalNode.Clone(deep);
         }
 
         /// <inheritdoc />
@@ -1301,6 +1453,34 @@ namespace AngleSharp.Dom
             }
         }
 
+        internal void DelayLoadUntilRetired(Task task, Task retired)
+        {
+            DelayLoad(CompleteUntilRetiredAsync(task, retired));
+        }
+
+        private static async Task CompleteUntilRetiredAsync(Task task, Task retired)
+        {
+            if (await Task.WhenAny(task, retired).ConfigureAwait(false) == task)
+            {
+                await task.ConfigureAwait(false);
+                return;
+            }
+
+            _ = ObserveRetiredTaskAsync(task);
+        }
+
+        private static async Task ObserveRetiredTaskAsync(Task task)
+        {
+            try
+            {
+                await task.ConfigureAwait(false);
+            }
+            catch
+            {
+                // A retired resource no longer participates in document readiness.
+            }
+        }
+
         #endregion
 
         #region Internal Methods
@@ -1354,8 +1534,7 @@ namespace AngleSharp.Dom
         /// </summary>
         internal async Task FinishLoadingAsync()
         {
-            var tasks = GetAttachedReferences<Task>().ToArray();
-            ReadyState = DocumentReadyState.Interactive;
+            await this.QueueTaskAsync(_ => ReadyState = DocumentReadyState.Interactive).ConfigureAwait(false);
 
             while (_loadingScripts.Count > 0)
             {
@@ -1363,21 +1542,29 @@ namespace AngleSharp.Dom
                 await _loadingScripts.Dequeue().RunAsync(CancellationToken.None).ConfigureAwait(false);
             }
 
-            this.FireSimpleEvent(EventNames.DomContentLoaded);
-            _view.FireSimpleEvent(EventNames.DomContentLoaded);
+            await this.QueueTaskAsync(_ => this.FireSimpleEvent(EventNames.DomContentLoaded, bubble: true)).ConfigureAwait(false);
 
-            await Task.WhenAll(tasks).ConfigureAwait(false);
-
-            ReadyState = DocumentReadyState.Complete;
-
-            Body?.FireSimpleEvent(EventNames.Load);
-            this.FireSimpleEvent(EventNames.Load);
-            _view.FireSimpleEvent(EventNames.Load);
-
-            if (IsInBrowsingContext && !_shown)
+            while (true)
             {
-                _shown = true;
-                this.Fire<PageTransitionEvent>(ev => ev.Init(EventNames.PageShow, false, false, false), _view);
+                var tasks = await this.QueueTaskAsync(_ =>
+                {
+                    var pending = GetAttachedReferences<Task>().Where(task => !task.IsCompleted).ToArray();
+                    if (pending.Length == 0)
+                    {
+                        // Check blockers and finish in one turn; another task
+                        // must not insert a load blocker between these steps.
+                        ReadyState = DocumentReadyState.Complete;
+                        _view.FireSimpleEvent(EventNames.Load);
+                        if (IsInBrowsingContext && !_shown)
+                        {
+                            _shown = true;
+                            this.Fire<PageTransitionEvent>(ev => ev.Init(EventNames.PageShow, false, false, false), _view);
+                        }
+                    }
+                    return pending;
+                }).ConfigureAwait(false);
+                if (tasks.Length == 0) break;
+                await Task.WhenAll(tasks).ConfigureAwait(false);
             }
 
             this.QueueTask(EmptyAppCache);

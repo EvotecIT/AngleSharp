@@ -3,6 +3,7 @@ namespace AngleSharp.Html.LinkRels
     using AngleSharp.Dom;
     using AngleSharp.Html.Dom;
     using AngleSharp.Io.Processors;
+    using System;
     using System.Threading.Tasks;
 
     /// <summary>
@@ -47,6 +48,11 @@ namespace AngleSharp.Html.LinkRels
         /// </summary>
         public Url? Url => _link.Href is { Length: > 0 } ? new Url(_link.Href) : null;
 
+        /// <summary>
+        /// Gets whether this relation delays the owning document's load event.
+        /// </summary>
+        public virtual Boolean DelaysDocumentLoad => true;
+
         #endregion
 
         #region Methods
@@ -55,6 +61,15 @@ namespace AngleSharp.Html.LinkRels
         /// Starts loading the associated resource(s) asynchronously.
         /// </summary>
         public abstract Task LoadAsync();
+
+        internal void Cancel()
+        {
+            var download = _processor.Download;
+            if (download is not null && !download.IsCompleted)
+            {
+                download.Cancel();
+            }
+        }
 
         #endregion
     }

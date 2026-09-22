@@ -12,6 +12,26 @@ namespace AngleSharp.Dom.Events
     [DomName("Event")]
     public class Event : EventArgs
     {
+        private Int32 _passiveListenerDepth;
+
+        /// <summary>Marks a synchronous passive listener, where cancellation is ignored.</summary>
+        public PassiveListenerScope BeginPassiveListener()
+        {
+            _passiveListenerDepth++;
+            return new PassiveListenerScope(this);
+        }
+
+        /// <summary>Restores event cancellation after a passive listener returns.</summary>
+        public readonly struct PassiveListenerScope : IDisposable
+        {
+            private readonly Event _event;
+
+            internal PassiveListenerScope(Event value) => _event = value;
+
+            /// <inheritdoc />
+            public void Dispose() => _event._passiveListenerDepth--;
+        }
+
         #region Fields
 
         private EventFlags _flags;
@@ -275,7 +295,7 @@ namespace AngleSharp.Dom.Events
         [DomName("preventDefault")]
         public void Cancel()
         {
-            if (_cancelable)
+            if (_cancelable && _passiveListenerDepth == 0)
             {
                 _flags |= EventFlags.Canceled;
             }
@@ -349,6 +369,13 @@ namespace AngleSharp.Dom.Events
                         ShadowAdjustedTarget = null,
                     });
                 }
+                // Document events participate in the window's capture/bubble
+                // path. Load events retain their special non-propagating path.
+                if (Type != EventNames.Load && ((Node)target).GetRoot() is Document document &&
+                    ReferenceEquals(document.Context.Active, document))
+                {
+                    eventPath.Add(new EventPathItem { InvocationTarget = (EventTarget)document.DefaultView });
+                }
             }
 
             _currentPath = eventPath;
@@ -367,7 +394,7 @@ namespace AngleSharp.Dom.Events
                 DispatchAt(eventPath);
             }
 
-            _flags &= ~EventFlags.Dispatch;
+            _flags &= ~(EventFlags.Dispatch | EventFlags.StopPropagation | EventFlags.StopImmediatePropagation);
             _phase = EventPhase.None;
             _current = null!;
             return (_flags & EventFlags.Canceled) == EventFlags.Canceled;
@@ -383,12 +410,12 @@ namespace AngleSharp.Dom.Events
         {
             foreach (var item in path)
             {
-                CallListeners(item.InvocationTarget);
-
                 if ((_flags & EventFlags.StopPropagation) == EventFlags.StopPropagation)
                 {
                     break;
                 }
+
+                CallListeners(item.InvocationTarget);
             }
         }
 

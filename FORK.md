@@ -1,0 +1,29 @@
+# Runtime integration fork
+
+This EvotecIT fork builds on AngleSharp v1.8.2. The upstream source and license remain
+in place. OfficeIMO uses the integration branch while the patches are qualified and
+prepared for discussion with upstream maintainers.
+
+The maintained changes cover:
+
+- DOM ownership, detached-node comparisons, dataset names, event dispatch, and mutation observation.
+- Optional parser synchronization, mutation microtask scheduling, and synchronous mutation notification services.
+- Reentrant `document.write`, script preparation and ordering, stylesheet blockers, and document readiness.
+- Frame sandbox propagation and integrity metadata captured at resource preparation.
+
+Host-specific resource budgets, import maps, module resolution, navigation policy,
+and rendering stay in OfficeIMO. The optional services must preserve ordinary
+AngleSharp use when no host implements them.
+
+Build and test from this repository:
+
+```sh
+dotnet build src/AngleSharp/AngleSharp.Core.csproj -f net10.0
+dotnet test src/AngleSharp.Core.Tests/AngleSharp.Core.Tests.csproj -f net10.0
+prefetched=true dotnet test src/AngleSharp.Core.Tests/AngleSharp.Core.Tests.csproj -f net10.0
+```
+
+Keep changes against upstream reviewable and preserve new upstream fixes during
+integration. Qualify both the standalone library and the consuming runtime before
+updating an OfficeIMO revision pin. Fork builds are not official AngleSharp releases.
+Do not publish packages under upstream package identities.

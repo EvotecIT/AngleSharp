@@ -377,7 +377,7 @@ namespace AngleSharp.Core.Tests.Library
         }
 
         [Test]
-        public async Task JavaScriptWithIntegrityButNoCorsShouldNotBeChecked()
+        public async Task CrossOriginJavaScriptWithIntegrityButNoCorsMustNotExecute()
         {
             var hasBeenChecked = false;
             var hasBeenParsed = false;
@@ -397,7 +397,7 @@ namespace AngleSharp.Core.Tests.Library
             await BrowsingContext.New(config).OpenAsync(res => res.Content(content).Address("http://localhost"));
 
             Assert.IsFalse(hasBeenChecked);
-            Assert.IsTrue(hasBeenParsed);
+            Assert.IsFalse(hasBeenParsed);
         }
 
         [Test]

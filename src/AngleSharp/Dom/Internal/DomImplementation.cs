@@ -75,7 +75,9 @@ namespace AngleSharp.Dom
 
         public IDocument CreateHtmlDocument(String title)
         {
-            var document = new HtmlDocument();
+            // Share observer delivery with the creating agent, while retaining a
+            // separate inert context without its loader or scripting services.
+            var document = new HtmlDocument(mutationHost: _owner.Mutations);
             document.AppendChild(new DocumentType(document, TagNames.Html));
             document.AppendChild(document.CreateElement(TagNames.Html));
             document.DocumentElement.AppendChild(document.CreateElement(TagNames.Head));

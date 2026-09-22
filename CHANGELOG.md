@@ -1,3 +1,9 @@
+# 1.8.2-evotec.1
+
+Development fork.
+
+- Added runtime integration services and DOM, lifecycle, sandbox, and integrity corrections; see FORK.md.
+
 # 1.8.2
 
 Released on Friday, September 18 2026

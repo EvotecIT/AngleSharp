@@ -126,46 +126,38 @@ namespace AngleSharp.Dom
         /// <param name="record">The record to enqueue.</param>
         internal static void QueueMutation(this Document document, MutationRecord record)
         {
-            if (!document.HasMutationObservers)
+            document.Context.GetService<IDomMutationListener>()?.OnMutation(document, record);
+            if (!document.Mutations.Observers.Any()) return;
+            var interested = new Dictionary<MutationObserver, Boolean>();
+            var order = new List<MutationObserver>();
+            foreach (var node in record.Target.GetInclusiveAncestors())
             {
-                return;
-            }
-
-            var observers = document.Mutations.Snapshot();
-            var nodes = record.Target.GetInclusiveAncestors();
-
-            for (var i = 0; i < observers.Length; i++)
-            {
-                var observer = observers[i];
-                var clearPreviousValue = default(Boolean?);
-
-                foreach (var node in nodes)
+                foreach (var entry in document.Mutations.Registrations(node))
                 {
-                    var options = observer.ResolveOptions(node);
-
+                    var options = entry.Registration.Options;
                     if (options.IsInvalid ||
-                       (node != record.Target && !options.IsObservingSubtree) ||
-                       (record.IsAttribute && !options.IsObservingAttributes) ||
-                       (record.IsAttribute && options.AttributeFilters is not null && (!options.AttributeFilters.Contains(record.AttributeName) || record.AttributeNamespace is not null)) ||
-                       (record.IsCharacterData && !options.IsObservingCharacterData) ||
-                       (record.IsChildList && !options.IsObservingChildNodes))
+                           (node != record.Target && !options.IsObservingSubtree) ||
+                           (record.IsAttribute && !options.IsObservingAttributes) ||
+                           (record.IsAttribute && options.AttributeFilters is not null && (!options.AttributeFilters.Contains(record.AttributeName) || record.AttributeNamespace is not null)) ||
+                           (record.IsCharacterData && !options.IsObservingCharacterData) ||
+                           (record.IsChildList && !options.IsObservingChildNodes))
                     {
                         continue;
                     }
-
-                    if (!clearPreviousValue.HasValue || clearPreviousValue.Value)
-                    {
-                        clearPreviousValue = (record.IsAttribute && !options.IsExaminingOldAttributeValue) ||
-                            (record.IsCharacterData && !options.IsExaminingOldCharacterData);
-                    }
-                }
-
-                if (clearPreviousValue is not null)
-                {
-                    observer.Enqueue(record.Copy(clearPreviousValue.Value));
+                    var clearPreviousValue = (record.IsAttribute && !options.IsExaminingOldAttributeValue) ||
+                        (record.IsCharacterData && !options.IsExaminingOldCharacterData);
+                    if (!interested.TryGetValue(entry.Observer, out var clear))
+                        order.Add(entry.Observer);
+                    else
+                        clearPreviousValue &= clear;
+                    interested[entry.Observer] = clearPreviousValue;
                 }
             }
-
+            foreach (var observer in order)
+            {
+                observer.Enqueue(record.Copy(interested[observer]));
+                document.Mutations.MarkPending(observer);
+            }
             document.PerformMicrotaskCheckpoint();
         }
 
@@ -177,15 +169,12 @@ namespace AngleSharp.Dom
         internal static void AddTransientObserver(this Document document, INode node)
         {
             var ancestors = node.GetAncestors();
-            var observers = document.Mutations.Observers;
-
             foreach (var ancestor in ancestors)
             {
-                foreach (var observer in observers)
-                {
-                    observer.AddTransient(ancestor, node);
-                }
+                foreach (var entry in document.Mutations.Registrations(ancestor).ToArray())
+                    entry.Observer.AddTransient(entry.Registration, node);
             }
+            document.Mutations.ScheduleCallback();
         }
 
         /// <summary>
@@ -271,9 +260,18 @@ namespace AngleSharp.Dom
         /// <returns>Awaitable task.</returns>
         public static async Task WaitForReadyAsync(this IDocument document)
         {
-            var scripts = document.GetScriptDownloads().ToArray();
-            await Task.WhenAll(scripts).ConfigureAwait(false);
-            var styles = document.GetStyleSheetDownloads().ToArray();
+            if (document is Document retained)
+            {
+                await retained.WaitForScriptBlockingStylesAsync().ConfigureAwait(false);
+                return;
+            }
+
+            // A script waits for its own download in RunAsync. Waiting for every
+            // script here would make unrelated async scripts block the parser.
+            Task[] styles;
+            var syncRoot = document.Context.GetService<IDomSynchronization>()?.SyncRoot;
+            if (syncRoot is null) styles = document.GetStyleSheetDownloads().ToArray();
+            else lock (syncRoot) styles = document.GetStyleSheetDownloads().ToArray();
             await Task.WhenAll(styles).ConfigureAwait(false);
         }
 

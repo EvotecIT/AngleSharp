@@ -191,7 +191,7 @@
         {
             var scripting = new CallbackScriptEngine(options =>
             {
-                options.Document.AddEventListener(EventNames.Load, (_, _) =>
+                options.Document.DefaultView.AddEventListener(EventNames.Load, (_, _) =>
                 {
                     options.Document.Title = "B";
                 });
@@ -471,7 +471,7 @@
                 var parsed = ((HtmlParseEvent)ev).Document;
                 parsed.ReadyStateChanged += (_, _) => observed.Add(parsed.ReadyState.ToString());
                 parsed.AddEventListener(EventNames.DomContentLoaded, (_, _) => observed.Add("DOMContentLoaded"));
-                parsed.AddEventListener(EventNames.Load, (_, _) => observed.Add("load"));
+                parsed.DefaultView.AddEventListener(EventNames.Load, (_, _) => observed.Add("load"));
             };
 
             var document = await parser.ParseDocumentAsync("<body><script type='c-sharp'>//...</script><p>text</p>");

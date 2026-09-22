@@ -22,8 +22,8 @@ namespace AngleSharp.Html.Dom
 
         #region ctor
 
-        internal HtmlDocument(IBrowsingContext? context, TextSource source)
-            : base(context ?? BrowsingContext.New(), source)
+        internal HtmlDocument(IBrowsingContext? context, TextSource source, MutationHost? mutationHost = null)
+            : base(context ?? BrowsingContext.New(), source, mutationHost)
         {
             ContentType = MimeTypeNames.Html;
             _htmlFactory = Context.GetFactory<IElementFactory<Document, HtmlElement>>();
@@ -31,8 +31,8 @@ namespace AngleSharp.Html.Dom
             _svgFactory = Context.GetFactory<IElementFactory<Document, SvgElement>>();
         }
 
-        internal HtmlDocument(IBrowsingContext? context = null)
-            : this(context, new TextSource(String.Empty))
+        internal HtmlDocument(IBrowsingContext? context = null, MutationHost? mutationHost = null)
+            : this(context, new TextSource(String.Empty), mutationHost)
         {
         }
 
@@ -59,7 +59,7 @@ namespace AngleSharp.Html.Dom
         public override Node Clone(Document owner, Boolean deep)
         {
             var source = new TextSource(Source.Text);
-            var node = new HtmlDocument(Context, source);
+            var node = new HtmlDocument(Context, source, Mutations);
             CloneDocument(node, deep);
             return node;
         }

@@ -7,7 +7,7 @@
     /// Enumeration of possible document position values.
     /// </summary>
     [Flags]
-    [DomName("Document")]
+    [DomName("Node")]
     public enum DocumentPositions : Byte
     {
         /// <summary>

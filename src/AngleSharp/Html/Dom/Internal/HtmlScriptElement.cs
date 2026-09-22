@@ -23,6 +23,7 @@ namespace AngleSharp.Html.Dom
 
         private Boolean _started;
         private Boolean _forceAsync;
+        private Boolean _ordered;
 
         #endregion
 
@@ -31,7 +32,7 @@ namespace AngleSharp.Html.Dom
         public HtmlScriptElement(Document owner, String? prefix = null, Boolean parserInserted = false, Boolean started = false)
             : base(owner, TagNames.Script, prefix, NodeFlags.Special | NodeFlags.LiteralText)
         {
-            _forceAsync = false;
+            _forceAsync = !parserInserted;
             _started = started;
             _parserInserted = parserInserted;
             _request = new ScriptRequestProcessor(owner.Context, this);
@@ -42,6 +43,8 @@ namespace AngleSharp.Html.Dom
         #region Properties
 
         public IDownload? CurrentDownload => _request?.Download;
+
+        internal Boolean IsParserBlocking { get; private set; }
 
         public String? Source
         {
@@ -81,8 +84,12 @@ namespace AngleSharp.Html.Dom
 
         public Boolean IsAsync
         {
-            get => this.GetBoolAttribute(AttributeNames.Async);
-            set => this.SetBoolAttribute(AttributeNames.Async, value);
+            get => _forceAsync || this.GetBoolAttribute(AttributeNames.Async);
+            set
+            {
+                _forceAsync = false;
+                this.SetBoolAttribute(AttributeNames.Async, value);
+            }
         }
 
         public String? Integrity
@@ -100,6 +107,7 @@ namespace AngleSharp.Html.Dom
             var node = new HtmlScriptElement(owner, Prefix, _parserInserted, _started);
             CloneElement(node, owner, deep);
             node._forceAsync = _forceAsync;
+            node._ordered = _ordered;
             return node;
         }
 
@@ -113,7 +121,14 @@ namespace AngleSharp.Html.Dom
 
             if (!_parserInserted && Prepare(Owner))
             {
-                RunAsync(CancellationToken.None);
+                if (!_ordered && String.IsNullOrEmpty(Source) && !Type.Isi("module") && _request.RunSynchronously())
+                {
+                    return;
+                }
+
+                Owner.DelayLoad(_ordered
+                    ? Owner.RunOrderedScriptAsync(this, CancellationToken.None)
+                    : RunAsync(CancellationToken.None));
             }
         }
 
@@ -156,6 +171,10 @@ namespace AngleSharp.Html.Dom
             }
 
             _started = true;
+            _ordered = !wasParserInserted && src is { Length: > 0 }
+                && !Type.Isi("module") && !IsAsync;
+            IsParserBlocking = _parserInserted && !Type.Isi("module") &&
+                (src is null || (!IsAsync && !IsDeferred));
 
             if (eventAttr is { Length: > 0 } && forAttr is { Length: >0 })
             {
@@ -188,6 +207,12 @@ namespace AngleSharp.Html.Dom
             else
             {
                 _request.Process(Text);
+                if (_parserInserted && Type.Isi("module"))
+                {
+                    if (IsAsync) document.DelayLoad(RunAsync(CancellationToken.None));
+                    else document.AddScript(this);
+                    return false;
+                }
                 return true;
             }
 
@@ -203,13 +228,18 @@ namespace AngleSharp.Html.Dom
             var executeDirectly = true;
 
             //Just add to the (end of) set of scripts
-            if (_parserInserted && (IsDeferred || IsAsync))
+            if (_parserInserted && !IsAsync && (IsDeferred || Type.Isi("module")))
             {
                 document.AddScript(this);
                 executeDirectly = false;
             }
 
             this.Process(_request, url);
+            if (_parserInserted && IsAsync)
+            {
+                document.DelayLoad(RunAsync(CancellationToken.None));
+                executeDirectly = false;
+            }
             return executeDirectly;
         }
 
@@ -222,6 +252,11 @@ namespace AngleSharp.Html.Dom
         Task IConstructableScriptElement.RunAsync(CancellationToken cancel)
         {
             return RunAsync(cancel);
+        }
+
+        Boolean IConstructableScriptElement.RunSynchronously()
+        {
+            return _request.RunSynchronously();
         }
 
         Boolean IConstructableScriptElement.Prepare(IConstructableDocument document)

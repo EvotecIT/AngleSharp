@@ -3,6 +3,7 @@ namespace AngleSharp.Dom
     using AngleSharp.Attributes;
     using System;
     using System.Collections.Generic;
+    using System.Threading;
 
     /// <summary>
     /// MutationObserver provides developers a way to react to changes in a
@@ -16,6 +17,7 @@ namespace AngleSharp.Dom
         private readonly Queue<IMutationRecord> _records;
         private readonly MutationCallback _callback;
         private readonly List<MutationObserving> _observing;
+        private static Int64 _registrationOrder;
 
         #endregion
 
@@ -36,6 +38,9 @@ namespace AngleSharp.Dom
         #endregion
 
         #region Properties
+
+        internal Boolean HasTransientRegistrations => _observing.Exists(observing => observing.TransientNodes.Count != 0);
+
 
         private MutationObserving? this[INode node]
         {
@@ -87,42 +92,32 @@ namespace AngleSharp.Dom
         }
 
         /// <summary>
-        /// Gets the options, if any, for the given node. If null is returned
-        /// then the node is not being observed.
+        /// Gets every direct or source-associated transient registration on a node.
         /// </summary>
         /// <param name="node">The node of interest.</param>
-        /// <returns>The options set for the provided node.</returns>
-        internal MutationOptions ResolveOptions(INode node)
+        /// <returns>The source registration and its order on this node.</returns>
+        internal IEnumerable<(MutationObserving Registration, Int64 Order)> ResolveRegistrations(INode node)
         {
             foreach (var observing in _observing)
             {
-                if (Object.ReferenceEquals(observing.Target, node) || observing.TransientNodes.Contains(node))
-                {
-                    return observing.Options;
-                }
+                if (Object.ReferenceEquals(observing.Target, node))
+                    yield return (observing, observing.Order);
+                if (observing.TransientNodes.TryGetValue(node, out var order))
+                    yield return (observing, order);
             }
-
-            return default;
         }
 
         /// <summary>
-        /// Adds a transient observer for the given node with the provided
-        /// ancestor, if the node's ancestor is currently observed.
+        /// Adds a transient registration while retaining its original source.
         /// </summary>
-        /// <param name="ancestor">
-        /// The ancestor that is currently observed.
-        /// </param>
+        /// <param name="source">The direct registration supplying the options.</param>
         /// <param name="node">
         /// The node to observe as a transient observer.
         /// </param>
-        internal void AddTransient(INode ancestor, INode node)
+        internal void AddTransient(MutationObserving source, INode node)
         {
-            var obs = this[ancestor];
-
-            if (obs is not null && obs.Options.IsObservingSubtree)
-            {
-                obs.TransientNodes.Add(node);
-            }
+            if (source.Options.IsObservingSubtree && !source.TransientNodes.ContainsKey(node))
+                source.TransientNodes.Add(node, Interlocked.Increment(ref _registrationOrder));
         }
 
         /// <summary>
@@ -147,10 +142,11 @@ namespace AngleSharp.Dom
             foreach (var observing in _observing)
             {
                 var node = (Node)observing.Target;
-                node.Owner.Mutations.Unregister(this);
+                (node as Document ?? node.Owner)?.Mutations.Unregister(this);
             }
 
             _records.Clear();
+            _observing.Clear();
         }
 
         /// <summary>
@@ -226,27 +222,23 @@ namespace AngleSharp.Dom
                     throw new DomException(DomError.Syntax);
                 }
 
-                if (node is Document document && document.DocumentElement is Node documentElement) {
-                    node = documentElement;
-                    target = documentElement;
-                }
-
-                if (node.Owner is null)
+                var owner = node as Document ?? node.Owner;
+                if (owner is null)
                 {
                     throw new DomException(DomError.HierarchyRequest);
                 }
 
-                node.Owner.Mutations.Register(this);
+                owner.Mutations.Register(this);
 
                 var existing = this[target];
 
                 if (existing != null)
                 {
                     existing.TransientNodes.Clear();
-                    _observing.Remove(existing);
+                    existing.Options = options;
                 }
-
-                _observing.Add(new MutationObserving(target, options));
+                else
+                    _observing.Add(new MutationObserving(target, options, Interlocked.Increment(ref _registrationOrder)));
             }
         }
 
@@ -281,17 +273,12 @@ namespace AngleSharp.Dom
             public readonly Boolean IsInvalid => !IsObservingAttributes && !IsObservingCharacterData && !IsObservingChildNodes;
         }
 
-        sealed class MutationObserving(INode target, MutationOptions options)
+        internal sealed class MutationObserving(INode target, MutationOptions options, Int64 order)
         {
-            private readonly INode _target = target;
-            private readonly MutationOptions _options = options;
-            private readonly List<INode> _transientNodes = [];
-
-            public INode Target => _target;
-
-            public MutationOptions Options => _options;
-
-            public List<INode> TransientNodes => _transientNodes;
+            public INode Target { get; } = target;
+            public MutationOptions Options { get; set; } = options;
+            public Int64 Order { get; } = order;
+            public Dictionary<INode, Int64> TransientNodes { get; } = [];
         }
 
         #endregion

@@ -21,6 +21,7 @@ namespace AngleSharp.Dom
         private Node? _parent;
         private NodeList _children;
         private Document? _owner;
+        private Int32 _replaceAllDepth;
 
         #endregion
 
@@ -238,7 +239,7 @@ namespace AngleSharp.Dom
 
         internal void ReplaceAll(Node? node, Boolean suppressObservers)
         {
-            var document = Owner;
+            var document = this as Document ?? Owner;
 
             if (node is not null)
             {
@@ -262,14 +263,22 @@ namespace AngleSharp.Dom
                 }
             }
 
-            for (var i = 0; i < removedNodes.Length; i++)
+            _replaceAllDepth++;
+            try
             {
-                RemoveChild(removedNodes[i], true);
-            }
+                for (var i = 0; i < removedNodes.Length; i++)
+                {
+                    RemoveChild(removedNodes[i], true);
+                }
 
-            for (var i = 0; i < addedNodes.Length; i++)
+                for (var i = 0; i < addedNodes.Length; i++)
+                {
+                    InsertBefore(addedNodes[i], null, true);
+                }
+            }
+            finally
             {
-                InsertBefore(addedNodes[i], null, true);
+                _replaceAllDepth--;
             }
 
             if (!suppressObservers)
@@ -291,7 +300,7 @@ namespace AngleSharp.Dom
 
         internal INode InsertBefore(Node newElement, Node? referenceElement, Boolean suppressObservers)
         {
-            var document = Owner;
+            var document = this as Document ?? Owner;
 
             if (referenceElement is not null && document is not null)
             {
@@ -370,7 +379,7 @@ namespace AngleSharp.Dom
 
         internal void RemoveChild(Node node, Boolean suppressObservers)
         {
-            var document = Owner;
+            var document = this as Document ?? Owner;
             var index = _children.Index(node);
 
             if (document is not null)
@@ -385,26 +394,22 @@ namespace AngleSharp.Dom
 
             if (!suppressObservers)
             {
-                // The removal is what decided a mutation happened - RemoveNode below it is the raw
-                // child list write the parser drives directly and must stay free of this.
                 OwningDocument?.MarkMutated();
-
-                // Both the record and the transient observer walk are pure observer bookkeeping:
-                // one is thrown away by QueueMutation and the other iterates an empty list when
-                // nothing is observing, so neither is worth its allocations then.
-                if (document is not null && document.HasMutationObservers)
-                {
-                    var removedNodes = new NodeList { node };
-
-                    document.QueueMutation(MutationRecord.ChildList(
-                        target: this,
-                        removedNodes: removedNodes,
-                        previousSibling: oldPreviousSibling,
-                        nextSibling: node.NextSibling));
-
-                    document.AddTransientObserver(node);
-                }
             }
+
+            if (!suppressObservers && document is not null && document.HasMutationObservers)
+            {
+                var removedNodes = new NodeList { node };
+
+                document.QueueMutation(MutationRecord.ChildList(
+                    target: this,
+                    removedNodes: removedNodes,
+                    previousSibling: oldPreviousSibling,
+                    nextSibling: node.NextSibling));
+
+            }
+
+            document?.AddTransientObserver(node);
 
             RemoveNode(index, node);
             NodeIsRemoved(node, oldPreviousSibling);
@@ -425,7 +430,11 @@ namespace AngleSharp.Dom
             if (node.IsInsertable())
             {
                 var referenceChild = child.NextSibling;
-                var document = Owner;
+                var previousChild = child.PreviousSibling;
+                var document = this as Document ?? Owner;
+                var observe = !suppressObservers && document is not null && document.HasMutationObservers;
+                var addedNodes = observe ? new NodeList() : null;
+                var removedNodes = observe ? new NodeList() : null;
 
                 if (this is IDocument parent && IsChangeForbidden(node, parent, child))
                 {
@@ -439,35 +448,32 @@ namespace AngleSharp.Dom
 
                 document?.AdoptNode(node);
                 RemoveChild(child, true);
+                removedNodes?.Add(child);
+
+                if (node._type == NodeType.DocumentFragment)
+                {
+                    addedNodes?.AddRange(node._children);
+                }
+                else
+                {
+                    addedNodes?.Add(node);
+                }
+
                 InsertBefore(node, referenceChild, true);
 
                 if (!suppressObservers)
                 {
-                    // The replacement is what decided a mutation happened: the remove and the
-                    // insert above ran suppressed precisely so this reports once.
                     OwningDocument?.MarkMutated();
+                }
 
-                    if (document is not null && document.HasMutationObservers)
-                    {
-                        var addedNodes = new NodeList();
-                        var removedNodes = new NodeList { child };
-
-                        if (node._type == NodeType.DocumentFragment)
-                        {
-                            addedNodes.AddRange(node._children);
-                        }
-                        else
-                        {
-                            addedNodes.Add(node);
-                        }
-
-                        document.QueueMutation(MutationRecord.ChildList(
-                            target: this,
-                            addedNodes: addedNodes,
-                            removedNodes: removedNodes,
-                            previousSibling: child.PreviousSibling,
-                            nextSibling: referenceChild));
-                    }
+                if (observe && document is not null)
+                {
+                    document.QueueMutation(MutationRecord.ChildList(
+                        target: this,
+                        addedNodes: addedNodes,
+                        removedNodes: removedNodes,
+                        previousSibling: previousChild,
+                        nextSibling: referenceChild));
                 }
 
                 return child;
@@ -479,6 +485,11 @@ namespace AngleSharp.Dom
         #endregion
 
         #region Protected Methods
+
+        /// <summary>
+        /// Gets whether this node is applying one logical replace-all mutation.
+        /// </summary>
+        protected Boolean IsReplacingAll => _replaceAllDepth != 0;
 
         /// <summary>
         /// Called when ReplaceAll was run.
@@ -646,11 +657,17 @@ namespace AngleSharp.Dom
         /// <inheritdoc />
         public DocumentPositions CompareDocumentPosition(INode otherNode)
         {
+            static INode Root(INode node)
+            {
+                while (node.Parent is not null) node = node.Parent;
+                return node;
+            }
+
             if (Object.ReferenceEquals(this, otherNode))
             {
                 return DocumentPositions.Same;
             }
-            else if (!Object.ReferenceEquals(Owner, otherNode.Owner))
+            else if (!Object.ReferenceEquals(Root(this), Root(otherNode)))
             {
                 var relative = otherNode.GetHashCode() > GetHashCode() ? DocumentPositions.Following : DocumentPositions.Preceding;
                 return DocumentPositions.Disconnected | DocumentPositions.ImplementationSpecific | relative;

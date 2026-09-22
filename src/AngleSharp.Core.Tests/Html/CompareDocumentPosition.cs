@@ -147,7 +147,9 @@
             var div1 = doc.CreateElement("div");
             var div2 = doc.CreateElement("div");
             var result = div1.CompareDocumentPosition(div2);
-            Assert.AreEqual(DocumentPositions.Following, result);
+            Assert.IsTrue(result.HasFlag(DocumentPositions.Disconnected));
+            Assert.IsTrue(result.HasFlag(DocumentPositions.ImplementationSpecific));
+            Assert.IsTrue(result.HasFlag(DocumentPositions.Following) ^ result.HasFlag(DocumentPositions.Preceding));
         }
     }
 }
