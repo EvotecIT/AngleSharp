@@ -48,6 +48,22 @@ namespace AngleSharp.Html.Dom
 
         #region Methods
 
+        internal static HtmlDocument CreateInitial(IBrowsingContext context)
+        {
+            var document = new HtmlDocument(context);
+            using var response = new DefaultResponse { Address = new Url("about:blank") };
+            document.Setup(response, new MimeType(MimeTypeNames.Html), null);
+            document.QuirksMode = QuirksMode.On;
+            document.Referrer = context.Parent?.Active?.Url ?? String.Empty;
+            var html = document.CreateElement(TagNames.Html);
+            document.AppendChild(html);
+            html.AppendChild(document.CreateElement(TagNames.Head));
+            html.AppendChild(document.CreateElement(TagNames.Body));
+            document.ReadyState = DocumentReadyState.Complete;
+            context.NavigateTo(document);
+            return document;
+        }
+
         public HtmlElement CreateHtmlElement(String name, String? prefix = null, NodeFlags flags = NodeFlags.None) => _htmlFactory.Create(this, name, prefix, flags);
 
         public MathElement CreateMathElement(String name, String? prefix = null, NodeFlags flags = NodeFlags.None) => _mathFactory.Create(this, name, prefix, flags);

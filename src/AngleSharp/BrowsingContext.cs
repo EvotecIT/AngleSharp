@@ -120,7 +120,7 @@ namespace AngleSharp
         /// a window. Useful for properly determining the proper target
         /// for `_top` and `_parent`.
         ///</summary>
-        internal Boolean IsFrame => _isFrameContext;
+        public Boolean IsFrame => _isFrameContext;
 
         /// <summary>
         /// Gets the session history of the given browsing context, if any.

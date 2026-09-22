@@ -554,10 +554,15 @@ namespace AngleSharp.Dom
 
         IWindow IWindow.Open(String url, String? name, String? features, String? replace)
         {
+            var target = new Url(new Url(_document.BaseUri), String.IsNullOrEmpty(url) ? "about:blank" : url);
+            if (target.IsInvalid) throw new DomException(DomError.Syntax);
             var context = _document.Context.CreateChild(name, Sandboxes.None);
-            var document = new HtmlDocument(context);
-            document.Location.Href = url;
-            return new Window(document) { Name = name };
+            var document = HtmlDocument.CreateInitial(context);
+            var window = document.DefaultView;
+            window.Name = name;
+            if (DocumentAboutUrl.IsBlank(target)) document.DocumentUrl.Href = target.Href;
+            else document.Location.Href = target.Href;
+            return window;
         }
 
         void IWindow.Close() => _closed = true;

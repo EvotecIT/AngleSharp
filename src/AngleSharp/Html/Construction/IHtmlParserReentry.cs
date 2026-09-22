@@ -8,6 +8,11 @@ using System;
 internal interface IHtmlParserReentry
 {
     /// <summary>
+    /// Gets whether a parser-blocking script currently owns an insertion point.
+    /// </summary>
+    Boolean IsExecutingScript { get; }
+
+    /// <summary>
     /// Establishes an insertion point for a parser-blocking script.
     /// </summary>
     Boolean EnterScript();

@@ -273,6 +273,8 @@ namespace AngleSharp.Html.Parser
             else lock (syncRoot) ExitScriptCore();
         }
 
+        Boolean IHtmlParserReentry.IsExecutingScript => _insertionPoints.Count > 0;
+
         Boolean IHtmlParserReentry.Write(String content)
         {
             var syncRoot = (_document as IDocument)?.Context.GetService<IDomSynchronization>()?.SyncRoot;

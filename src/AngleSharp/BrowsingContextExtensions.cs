@@ -24,6 +24,20 @@ namespace AngleSharp
         #region Open
 
         /// <summary>
+        /// Creates the initial, empty about:blank document synchronously in a
+        /// newly created context. Its base and origin inherit from the creator.
+        /// No network request or authored script is executed.
+        /// </summary>
+        /// <param name="context">A context with no active document.</param>
+        /// <returns>The context's active initial document.</returns>
+        public static IDocument OpenInitialDocument(this IBrowsingContext context)
+        {
+            if (context is null) throw new ArgumentNullException(nameof(context));
+            if (context.Active != null) throw new InvalidOperationException("The context already has an active document.");
+            return AngleSharp.Html.Dom.HtmlDocument.CreateInitial(context);
+        }
+
+        /// <summary>
         /// Opens a new document without any content in the given context.
         /// </summary>
         /// <param name="context">The browsing context to use.</param>

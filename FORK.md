@@ -16,6 +16,14 @@ The maintained changes cover:
   template-content and foreign elements cannot replace the active base.
 - Optional parser synchronization, mutation microtask scheduling, and synchronous mutation notification services.
 - Reentrant `document.write`, script preparation and ordering, stylesheet blockers, and document readiness.
+- Document replacement preserves the document, window, origin and queued tasks;
+  clears connected listeners; reports the DOM replacement; and applies the entry
+  document's URL only when the target is fully active. Host unload scopes and
+  parser-executed scripts suppress destructive input-stream operations.
+  This does not implement a script-created incremental input parser.
+- Initial auxiliary documents have an HTML/head/body tree, inherited base and
+  origin, and a creator referrer. Host code retains ownership of opening policy,
+  quotas, navigation and realm lifetime.
 - Frame sandbox propagation and integrity metadata captured at resource preparation.
 - Local iframe documents keep their `about:blank` / `about:srcdoc` identity and
   snapshot the creator's base URL and origin. Empty frames initialize after

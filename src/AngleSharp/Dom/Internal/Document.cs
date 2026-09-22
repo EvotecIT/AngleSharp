@@ -28,6 +28,8 @@ namespace AngleSharp.Dom
 
         private DocumentBaseUrl? _baseUrlState;
         private DocumentAboutUrl? _aboutUrl;
+        private String? _originOnOpen;
+        private DocumentUnloadState? _unloadState;
         private readonly List<WeakReference> _attachedReferences;
         private readonly Queue<HtmlScriptElement> _loadingScripts;
         private readonly MutationHost _mutations;
@@ -886,7 +888,7 @@ namespace AngleSharp.Dom
         }
 
         /// <inheritdoc />
-        public String? Origin => _aboutUrl?.Origin ?? _location.Origin;
+        public String? Origin => _originOnOpen ?? _aboutUrl?.Origin ?? _location.Origin;
 
         /// <inheritdoc />
         public String? SelectedStyleSheetSet
@@ -1129,85 +1131,73 @@ namespace AngleSharp.Dom
         }
 
         /// <inheritdoc />
-        public IDocument Open(String type = "text/html", String? replace = null)
+        public IDocument Open(String type = "text/html", String? replace = null) => OpenFrom(this);
+
+        /// <summary>
+        /// Prevents destructive input-stream operations while a host dispatches
+        /// navigation lifecycle events. This does not dispatch events or cancel
+        /// tasks. Dispose the returned scope after beforeunload, pagehide, or
+        /// unload processing finishes, including when navigation is cancelled.
+        /// Nested scopes are supported.
+        /// </summary>
+        /// <returns>A scope that restores the previous unload depth on disposal.</returns>
+        public IDisposable BeginUnloadScope() => (_unloadState ??= new DocumentUnloadState()).Enter();
+
+        /// <summary>
+        /// Gets whether this document and its ancestor documents are active in their browsing contexts.
+        /// </summary>
+        public Boolean IsFullyActive => DocumentOpenContext.IsFullyActive(this);
+
+        /// <summary>
+        /// Opens this document's input stream on behalf of an entry document.
+        /// Script hosts must supply the document of their entry global object,
+        /// which need not be the receiver's parent or the method's own realm.
+        /// </summary>
+        /// <param name="entryDocument">The document from which the operation was entered.</param>
+        /// <returns>This document.</returns>
+        public IDocument OpenFrom(IDocument entryDocument)
         {
             if (!ContentType.Is(MimeTypeNames.Html))
             {
                 throw new DomException(DomError.InvalidState);
             }
 
-            if (!IsInBrowsingContext || Object.ReferenceEquals(_context.Active, this))
+            if (entryDocument is null)
             {
-                var responsibleDocument = _context?.Parent!.Active;
+                throw new ArgumentNullException(nameof(entryDocument));
+            }
 
-                if (responsibleDocument != null && !responsibleDocument.Origin.Is(Origin))
-                {
-                    throw new DomException(DomError.Security);
-                }
+            DocumentOpenContext.CheckOrigin(this, entryDocument);
 
-                if (!_firedUnload && _loadingScripts.Count == 0)
-                {
-                    var shallReplace = replace.Isi(Keywords.Replace);
-                    var history = _context!.SessionHistory;
-                    var index = type?.IndexOf(Symbols.Semicolon) ?? -1;
-
-                    if (!shallReplace && history != null)
-                    {
-                        shallReplace = history.Length == 1 && history[0].Url is "about:blank";
-                    }
-
-                    _salvageable = false;
-
-                    var shouldUnload = PromptToUnloadAsync().Result;
-
-                    if (!shouldUnload)
-                    {
-                        return this;
-                    }
-
-                    // Moved up, i.e., before any destructive action as per #1276
-                    _source.CurrentEncoding = TextEncoding.Utf8;
-
-                    Unload(recycle: true).Wait();
-                    Abort();
-                    RemoveEventListeners();
-
-                    foreach (var element in this.Descendants<Element>())
-                    {
-                        element.RemoveEventListeners();
-                    }
-
-                    _loop?.CancelAll();
-                    ReplaceAll(null, suppressObservers: true);
-                    _salvageable = true;
-                    _ready = DocumentReadyState.Loading;
-
-                    if (type.Isi(Keywords.Replace))
-                    {
-                        type = MimeTypeNames.Html;
-                    }
-                    else if (index >= 0)
-                    {
-                        type = type!.Substring(0, index);
-                    }
-
-                    type = type!.StripLeadingTrailingSpaces();
-
-                    if (!type.Isi(MimeTypeNames.Html))
-                    {
-                        //Act as if the tokenizer had emitted a start tag token with the tag name "pre" followed by a single
-                        //U+000A LINE FEED(LF) character, then switch the HTML parser's tokenizer to the PLAINTEXT state.
-                    }
-
-                    ContentType = type;
-                    _firedUnload = false;
-                    _source.Index = _source.Length;
-                }
-
+            var parser = ((IConstructableDocument)this).Builder as IHtmlParserReentry;
+            if (_unloadState?.IsUnloading == true || parser?.IsExecutingScript == true)
+            {
                 return this;
             }
 
-            return null!;
+            // Opening an input stream keeps this document and its window alive.
+            // In particular, it is not a navigation and must not dispatch unload
+            // events or cancel the window's queued tasks.
+            _source.CurrentEncoding = TextEncoding.Utf8;
+            var origin = Origin;
+            DocumentListenerReset.Clear(this);
+            _view.RemoveEventListeners();
+            ReplaceAll(null, suppressObservers: false);
+            if (IsFullyActive)
+            {
+                _originOnOpen ??= origin;
+                var url = new Url(entryDocument.Url);
+                if (!ReferenceEquals(this, entryDocument)) url.Fragment = null;
+                _location.Original.Href = url.Href;
+                _location.Original.Fragment = url.Fragment;
+                _location.Original.Query = url.Query;
+                if (!DocumentAboutUrl.IsBlank(url) && !DocumentAboutUrl.IsSrcdocUrl(url)) _aboutUrl = null;
+            }
+            _salvageable = true;
+            _ready = DocumentReadyState.Loading;
+            _quirksMode = QuirksMode.Off;
+            _source.Index = _source.Length;
+            return this;
         }
 
         /// <inheritdoc />
@@ -1225,6 +1215,7 @@ namespace AngleSharp.Dom
         /// <inheritdoc />
         public void Write(String content)
         {
+            if (_unloadState?.IsUnloading == true) return;
             if (IsReady)
             {
                 var source = content ?? String.Empty;
@@ -1600,6 +1591,7 @@ namespace AngleSharp.Dom
         /// <returns>True if unload okay, otherwise false.</returns>
         internal async Task<Boolean> PromptToUnloadAsync()
         {
+            using var unload = BeginUnloadScope();
             var descendants = GetAttachedReferences<IBrowsingContext>();
 
             if (_view.HasEventListener(EventNames.BeforeUnload))
@@ -1650,6 +1642,7 @@ namespace AngleSharp.Dom
         /// <param name="recycle">The recycle parameter.</param>
         internal async Task Unload(Boolean recycle)
         {
+            using var unload = BeginUnloadScope();
             var descendants = GetAttachedReferences<IBrowsingContext>();
 
             if (_shown)
@@ -1843,6 +1836,7 @@ namespace AngleSharp.Dom
             CloneNode(document, document, deep);
             document._ready = _ready;
             document._aboutUrl = _aboutUrl;
+            document._originOnOpen = _originOnOpen;
             document.Referrer = Referrer;
             document._location.Href = _location.Href;
             document._quirksMode = _quirksMode;
