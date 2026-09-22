@@ -8,8 +8,8 @@ The maintained changes cover:
 
 - DOM ownership, detached-node comparisons, dataset names, event dispatch, and mutation observation.
 - Native `Unloading` handlers subscribe to the standard `beforeunload` event name.
-- Native listener registrations can be queried by event type, callback and capture
-  flag, allowing script hosts to reconcile callback caches after bulk removal.
+- Native listener removal notifies script hosts with the removed callback and capture
+  flag, allowing them to invalidate cached handler properties after bulk removal.
 - The first connected HTML base element owns the frozen document base URL. DOM
   insertion, removal, attribute changes, adoption and cloning update that state;
   invalid, data and JavaScript bases freeze the fallback URL. Detached, later,
@@ -43,7 +43,7 @@ The native beforeunload wiring is proposed in
 the existing `Unloading` constant and using `BeforeUnload` for subscriptions.
 Frozen base URLs are proposed independently in
 [AngleSharp #1355](https://github.com/AngleSharp/AngleSharp/pull/1355).
-The native listener registration query is proposed in
+The native listener-removal notification is proposed in
 [AngleSharp #1356](https://github.com/AngleSharp/AngleSharp/pull/1356).
 Queued timer callbacks recheck cancellation when executed, including window
 disposal after the delay has elapsed. This fix is proposed in
