@@ -164,6 +164,41 @@ namespace AngleSharp.Core.Tests.Library
             Assert.AreEqual("https://open.example", child.Origin);
         }
 
+        [TestCase(false, false)]
+        [TestCase(false, true)]
+        [TestCase(true, false)]
+        [TestCase(true, true)]
+        public async Task ImplicitOpenFromWriteUsesTheEntryUrl(bool srcdoc, bool lineFeed)
+        {
+            var config = Configuration.Default.WithDefaultLoader(new LoaderOptions { IsResourceLoadingEnabled = true });
+            var parent = await BrowsingContext.New(config).OpenAsync(request => request
+                .Content("<iframe " + (srcdoc ? "srcdoc='<h1>Child</h1>'" : "") + "></iframe>")
+                .Address("https://open.example/parent#fragment"));
+            var child = (Document)parent.QuerySelector<IHtmlInlineFrameElement>("iframe").ContentDocument;
+
+            if (lineFeed) child.WriteLineFrom(parent, "<p>New</p>");
+            else child.WriteFrom(parent, "<p>New</p>");
+            ((IDocument)child).Close();
+
+            Assert.AreEqual("https://open.example/parent", child.Url);
+            Assert.AreEqual(child.Url, child.BaseUri);
+            Assert.AreEqual("New", child.QuerySelector("p").TextContent);
+        }
+
+        [Test]
+        public async Task ImplicitOpenFromForeignEntryIsRejectedBeforeChangingTheTarget()
+        {
+            var target = (Document)await BrowsingContext.New(Configuration.Default).OpenAsync(request =>
+                request.Content("<h1>Keep</h1>").Address("https://open.example/old"));
+            var entry = await BrowsingContext.New(Configuration.Default).OpenAsync(request =>
+                request.Content("").Address("https://foreign.example/"));
+
+            Assert.Throws<DomException>(() => target.WriteFrom(entry, "<h1>Wrong</h1>"));
+
+            Assert.AreEqual("https://open.example/old", target.Url);
+            Assert.AreEqual("Keep", target.QuerySelector("h1").TextContent);
+        }
+
         [Test]
         public async Task ForeignEntryDocumentIsRejectedBeforeChangingTheTarget()
         {

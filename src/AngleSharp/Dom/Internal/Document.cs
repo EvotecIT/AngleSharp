@@ -1228,36 +1228,46 @@ namespace AngleSharp.Dom
         }
 
         /// <inheritdoc />
-        public void Write(String content)
+        public void Write(String content) => WriteFrom(this, content);
+
+        /// <summary>
+        /// Writes into this document's input stream on behalf of an entry document.
+        /// When writing implicitly opens a completed document, the entry document
+        /// determines the new URL just as it does for an explicit open.
+        /// </summary>
+        /// <param name="entryDocument">The document from which the operation was entered.</param>
+        /// <param name="content">The markup to write.</param>
+        public void WriteFrom(IDocument entryDocument, String content)
         {
             if (_unloadState?.IsUnloading == true) return;
             if (IsReady)
             {
-                var source = content ?? String.Empty;
-                var newDocument = Open();
-                newDocument.Write(source);
+                OpenFrom(entryDocument);
             }
-            else
+
+            var source = content ?? String.Empty;
+            var builder = ((IConstructableDocument)this).Builder;
+            if (builder is IHtmlParserReentry parser && parser.Write(source))
             {
-                var source = content ?? String.Empty;
-                var builder = ((IConstructableDocument)this).Builder;
-                if (builder is IHtmlParserReentry parser && parser.Write(source))
-                {
-                    _parserWriteVersion++;
-                }
-                else if (Volatile.Read(ref _ignoreDestructiveWrites) > 0)
-                {
-                    return;
-                }
-                else if (_source is ITextSource wts)
-                {
-                    wts.InsertText(source);
-                }
+                _parserWriteVersion++;
+            }
+            else if (Volatile.Read(ref _ignoreDestructiveWrites) > 0)
+            {
+                return;
+            }
+            else if (_source is ITextSource wts)
+            {
+                wts.InsertText(source);
             }
         }
 
         /// <inheritdoc />
         public void WriteLine(String content) => Write(content + Symbols.LineFeed);
+
+        /// <summary>Writes markup and a line feed on behalf of an entry document.</summary>
+        /// <param name="entryDocument">The document from which the operation was entered.</param>
+        /// <param name="content">The markup to write.</param>
+        public void WriteLineFrom(IDocument entryDocument, String content) => WriteFrom(entryDocument, content + Symbols.LineFeed);
 
         /// <inheritdoc />
         public IHtmlCollection<IElement> GetElementsByName(String name)
