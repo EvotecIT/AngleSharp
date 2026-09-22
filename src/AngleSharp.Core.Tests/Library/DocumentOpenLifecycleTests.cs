@@ -89,6 +89,7 @@ namespace AngleSharp.Core.Tests.Library
             ((Document)parent).OpenFrom(child);
 
             Assert.AreEqual(expectedUrl, parent.Url);
+            Assert.AreEqual(expectedUrl, parent.Location.Href);
             Assert.AreEqual(expectedUrl, parent.BaseUri);
             Assert.AreEqual("https://open.example", parent.Origin);
             Assert.AreEqual(parent.Origin, ((IDocument)parent.Clone()).Origin);
