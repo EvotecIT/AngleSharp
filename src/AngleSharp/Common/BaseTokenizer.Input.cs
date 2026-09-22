@@ -13,6 +13,37 @@ public abstract partial class BaseTokenizer
     private Int32 AvailableInputLength => Math.Min(_source.Length, InputLimit);
     private protected Boolean AtInputBoundary => IsInputOpen && _source.Index >= AvailableInputLength;
 
+    // A start tag with a valid name cannot produce a token until its closing
+    // bracket arrives (or the input stream closes). While inside a quoted
+    // attribute, even a bracket cannot complete the token; only the matching
+    // quote is worth replaying. Scan only newly appended input.
+    private protected Boolean CanWaitForStartTagTerminator(Int32 start, Int32 scannedLength, Char terminator,
+        Boolean scanNewInput, out Int32 currentLength)
+    {
+        currentLength = AvailableInputLength;
+        if (!IsInputOpen || InputLimit != Int32.MaxValue || _source.Index != start ||
+            start < 0 || start + 1 >= currentLength || scannedLength > currentLength ||
+            _source[start] != '<')
+        {
+            return false;
+        }
+
+        var nameStart = _source[start + 1];
+        if (!((nameStart >= 'a' && nameStart <= 'z') || (nameStart >= 'A' && nameStart <= 'Z')))
+        {
+            return false;
+        }
+
+        // The tokenizer already proved the whole prefix incomplete on the first
+        // pass. Only later appends need a terminator check.
+        for (var i = scanNewInput ? scannedLength : currentLength; i < currentLength; i++)
+        {
+            if (_source[i] == terminator) return false;
+        }
+
+        return true;
+    }
+
     internal void UseExpandableInput()
     {
         _charBuffer.Dispose();

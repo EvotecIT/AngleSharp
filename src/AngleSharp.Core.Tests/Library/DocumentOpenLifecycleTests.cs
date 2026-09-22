@@ -95,6 +95,38 @@ namespace AngleSharp.Core.Tests.Library
         }
 
         [Test]
+        public async Task ManyWritesIntoAnUnfinishedStartTagEmitOnlyAfterItsClosingBracket()
+        {
+            var document = await BrowsingContext.New(Configuration.Default).OpenAsync(request =>
+                request.Content("<p>Old</p>").Address("https://open.example/page"));
+            document.Open();
+            document.Write("<div data-long='");
+            for (var i = 0; i < 2048; i++) document.Write("x");
+            Assert.IsNull(document.QuerySelector("div"));
+
+            document.Write(">"); // A bracket inside the quoted value cannot end the tag.
+            for (var i = 0; i < 2048; i++) document.Write("y");
+            Assert.IsNull(document.QuerySelector("div"));
+
+            document.Write("'>Done</div>");
+            document.Close();
+            Assert.AreEqual(4097, document.QuerySelector("div").GetAttribute("data-long").Length);
+            Assert.AreEqual("Done", document.QuerySelector("div").TextContent);
+        }
+
+        [Test]
+        public async Task EscapedScriptTextStillEmitsAcrossAnIncompleteTagLikeSequence()
+        {
+            var document = await BrowsingContext.New(Configuration.Default).OpenAsync(request =>
+                request.Content("<p>Old</p>").Address("https://open.example/page"));
+            document.Open();
+            document.Write("<script><!--<a");
+            document.Write(" ");
+
+            Assert.IsTrue(document.QuerySelector("script").TextContent.EndsWith("<a "));
+        }
+
+        [Test]
         public async Task DetachedFrameIsNotFullyActiveWhenOpenedByItsFormerParent()
         {
             var config = Configuration.Default.WithDefaultLoader(new LoaderOptions { IsResourceLoadingEnabled = true });

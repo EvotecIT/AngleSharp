@@ -2126,36 +2126,44 @@ namespace AngleSharp.Html.Parser
                     // and 8.2.4.39 Attribute value (single-quoted) state
                     case AttributeState.QuotedValue:
                     {
-                        c = GetNext();
-
-                        if (c == quote)
+                        try
                         {
-                            if (attributeAllowed)
+                            c = GetNext();
+
+                            if (c == quote)
                             {
-                                var value = FlushBufferFast();
-                                tag.SetAttributeValue(value);
+                                if (attributeAllowed)
+                                {
+                                    var value = FlushBufferFast();
+                                    tag.SetAttributeValue(value);
+                                }
+                                else
+                                {
+                                    CharBuffer.Discard();
+                                }
+                                state = AttributeState.AfterValue;
+                            }
+                            else if (c == Symbols.Ampersand)
+                            {
+                                AppendCharacterReference(GetNext(), quote, true);
+                            }
+                            else if (c == Symbols.Null)
+                            {
+                                AppendReplacement();
+                            }
+                            else if (c != Symbols.EndOfFile)
+                            {
+                                Append(c);
                             }
                             else
                             {
-                                CharBuffer.Discard();
+                                return ref NewEof();
                             }
-                            state = AttributeState.AfterValue;
                         }
-                        else if (c == Symbols.Ampersand)
+                        catch (IncompleteInputException)
                         {
-                            AppendCharacterReference(GetNext(), quote, true);
-                        }
-                        else if (c == Symbols.Null)
-                        {
-                            AppendReplacement();
-                        }
-                        else if (c != Symbols.EndOfFile)
-                        {
-                            Append(c);
-                        }
-                        else
-                        {
-                            return ref NewEof();
+                            _inputAttributeQuote = quote;
+                            throw;
                         }
 
                         break;
