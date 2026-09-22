@@ -24,6 +24,12 @@ Host-specific resource budgets, import maps, module resolution, navigation polic
 and rendering stay in OfficeIMO. The optional services must preserve ordinary
 AngleSharp use when no host implements them.
 
+The native beforeunload wiring is proposed in
+[AngleSharp #1354](https://github.com/AngleSharp/AngleSharp/pull/1354), preserving
+the existing `Unloading` constant and using `BeforeUnload` for subscriptions.
+Frozen base URLs are proposed independently in
+[AngleSharp #1355](https://github.com/AngleSharp/AngleSharp/pull/1355).
+
 Build and test from this repository:
 
 ```sh
