@@ -513,7 +513,7 @@ namespace AngleSharp.Dom
             _context = context;
             _source = source;
             _ready = DocumentReadyState.Loading;
-            _sandbox = Sandboxes.None;
+            _sandbox = context.Security;
             _quirksMode = QuirksMode.Off;
             _loadingScripts = new Queue<HtmlScriptElement>();
             _scriptBlockingStyles = new List<(Task Task, Func<Boolean> IsBlocking)>();
