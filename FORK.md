@@ -37,6 +37,9 @@ Frozen base URLs are proposed independently in
 [AngleSharp #1355](https://github.com/AngleSharp/AngleSharp/pull/1355).
 The native listener registration query is proposed in
 [AngleSharp #1356](https://github.com/AngleSharp/AngleSharp/pull/1356).
+Queued timer callbacks recheck cancellation when executed, including window
+disposal after the delay has elapsed. This fix is proposed in
+[AngleSharp #1357](https://github.com/AngleSharp/AngleSharp/pull/1357).
 
 Build and test from this repository:
 
