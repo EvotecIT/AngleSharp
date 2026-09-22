@@ -90,6 +90,13 @@ namespace AngleSharp.Html.Dom
 
         internal void UpdateSource()
         {
+            // Setup replays attributes before the element is ready. Resolve the
+            // complete source once afterward, not once for each src/srcdoc value.
+            if (!_isSetup || this.GetRoot() is not Document)
+            {
+                return;
+            }
+
             var content = GetContentHtml();
             var rawSource = this.GetOwnAttribute(AttributeNames.Src);
             var url = String.IsNullOrWhiteSpace(rawSource) ? new Url("about:blank") : this.HyperReference(Source!);
@@ -118,7 +125,7 @@ namespace AngleSharp.Html.Dom
         protected override void OnParentChanged()
         {
             base.OnParentChanged();
-            if (_isSetup && this.GetRoot() is Document && _context?.Active is null && this.GetOwnAttribute(AttributeNames.Src) is null && GetContentHtml() is null)
+            if (_isSetup && this.GetRoot() is Document && _context?.Active is null)
             {
                 UpdateSource();
             }
