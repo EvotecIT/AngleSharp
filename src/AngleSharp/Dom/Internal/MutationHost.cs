@@ -104,7 +104,22 @@ namespace AngleSharp.Dom
                 // even when the removal did not produce an interested record.
                 foreach (var observer in Observers.ToArray())
                     if (Array.IndexOf(pending, observer) < 0) observer.ClearTransients();
-                foreach (var observer in pending) observer.Trigger();
+                List<Exception>? failures = null;
+                foreach (var observer in pending)
+                {
+                    try
+                    {
+                        observer.Trigger();
+                    }
+                    catch (Exception error)
+                    {
+                        (failures ??= new List<Exception>()).Add(error);
+                    }
+                }
+
+                // Report through the owning event loop only after every pending
+                // observer has received its records. One callback cannot starve another.
+                if (failures is not null) throw new AggregateException(failures);
             }
         }
 

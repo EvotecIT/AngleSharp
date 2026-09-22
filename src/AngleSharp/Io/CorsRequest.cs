@@ -1,5 +1,7 @@
 namespace AngleSharp.Io
 {
+    using AngleSharp.Dom;
+
     /// <summary>
     /// Represents the arguments to perform a fetch with CORS.
     /// </summary>
@@ -12,6 +14,9 @@ namespace AngleSharp.Io
         public CorsRequest(ResourceRequest request)
         {
             Request = request;
+            IntegrityMetadata = request.IntegritySnapshot is { IsResolved: true } snapshot
+                ? snapshot.Value
+                : request.IntegrityMetadata ?? request.Source.GetAttribute(AttributeNames.Integrity);
         }
 
         /// <summary>
@@ -51,6 +56,8 @@ namespace AngleSharp.Io
 
         /// <summary>
         /// Gets or sets the integrity metadata captured when the request was prepared.
+        /// Defaults to the resource request's prepared metadata or the source attribute.
+        /// An explicitly empty value disables integrity requirements for this request.
         /// </summary>
         public string? IntegrityMetadata
         {

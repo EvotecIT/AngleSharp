@@ -68,6 +68,33 @@ namespace AngleSharp.Core.Tests.Library
             Assert.AreEqual("childList", listener.Records[1].Type);
         }
 
+        [Test]
+        public void ThrowingObserverDoesNotPreventOtherNotifications()
+        {
+            var loop = new ManualLoop();
+            var document = "<p></p>".ToHtmlDocument(Configuration.Default.With<IEventLoop>(_ => loop));
+            loop.Spin();
+            var element = document.QuerySelector("p");
+            var error = new InvalidOperationException("observer failure");
+            var first = new MutationObserver((_, __) => throw error);
+            var delivered = new List<IMutationRecord>();
+            var second = new MutationObserver((records, _) => delivered.AddRange(records));
+            first.Connect(element, attributes: true);
+            second.Connect(element, attributes: true);
+            element.SetAttribute("data-value", "1");
+
+            var reported = Assert.Throws<AggregateException>(() => loop.Spin());
+            Assert.AreSame(error, reported.InnerExceptions.Single());
+            Assert.AreEqual(1, delivered.Count);
+            Assert.AreSame(element, delivered[0].Target);
+            Assert.IsEmpty(second.Flush());
+            first.Disconnect();
+            element.SetAttribute("data-value", "2");
+            loop.Spin();
+            Assert.AreEqual(2, delivered.Count);
+            second.Disconnect();
+        }
+
         private sealed class MutationListener : IDomMutationListener
         {
             internal readonly List<IMutationRecord> Records = new List<IMutationRecord>();
@@ -76,8 +103,16 @@ namespace AngleSharp.Core.Tests.Library
 
         private sealed class ManualLoop : IEventLoop
         {
-            public ICancellable Enqueue(Action<CancellationToken> action, TaskPriority priority) => new Pending();
-            public void Spin() { }
+            private readonly Queue<Action<CancellationToken>> _actions = new Queue<Action<CancellationToken>>();
+            public ICancellable Enqueue(Action<CancellationToken> action, TaskPriority priority)
+            {
+                _actions.Enqueue(action);
+                return new Pending();
+            }
+            public void Spin()
+            {
+                while (_actions.Count > 0) _actions.Dequeue()(CancellationToken.None);
+            }
             public void CancelAll() { }
 
             private sealed class Pending : ICancellable

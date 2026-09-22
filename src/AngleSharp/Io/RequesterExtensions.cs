@@ -185,7 +185,7 @@ namespace AngleSharp.Io
             var value = cors.IntegrityMetadata;
             var integrity = cors.Integrity;
 
-            if (value != null && integrity != null && response != null)
+            if (value != null && value.Length != 0 && integrity != null && response != null)
             {
                 var content = new MemoryStream();
                 response.Content.CopyTo(content);

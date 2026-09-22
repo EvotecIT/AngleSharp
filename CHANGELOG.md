@@ -3,6 +3,7 @@
 Development fork.
 
 - Added runtime integration services and DOM, lifecycle, sandbox, and integrity corrections; see FORK.md.
+- Preserved integrity checks for public request callers and isolated failures between mutation observer notifications.
 
 # 1.8.2
 
