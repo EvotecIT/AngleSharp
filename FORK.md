@@ -41,6 +41,11 @@ Queued timer callbacks recheck cancellation when executed, including window
 disposal after the delay has elapsed. This fix is proposed in
 [AngleSharp #1357](https://github.com/AngleSharp/AngleSharp/pull/1357).
 
+Document form policy now inherits the browsing-context sandbox. Rejected
+submissions stop before target lookup or navigation in both asynchronous
+overloads. This fix is proposed in
+[AngleSharp #1358](https://github.com/AngleSharp/AngleSharp/pull/1358).
+
 Build and test from this repository:
 
 ```sh
