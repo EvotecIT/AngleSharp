@@ -2,6 +2,8 @@
 
 Development fork.
 
+- Corrected native Unloading subscriptions to use the beforeunload event name.
+
 - Added runtime integration services and DOM, lifecycle, sandbox, and integrity corrections; see FORK.md.
 - Preserved integrity checks for public request callers and isolated failures between mutation observer notifications.
 
