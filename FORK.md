@@ -15,6 +15,10 @@ The maintained changes cover:
 - Optional parser synchronization, mutation microtask scheduling, and synchronous mutation notification services.
 - Reentrant `document.write`, script preparation and ordering, stylesheet blockers, and document readiness.
 - Frame sandbox propagation and integrity metadata captured at resource preparation.
+- Local iframe documents keep their `about:blank` / `about:srcdoc` identity and
+  snapshot the creator's base URL and origin. Empty frames initialize after
+  connected element setup; authored sources do not execute while detached.
+  Opaque sandbox origins remain distinct from inherited resource bases.
 - Standalone observer notification batches continue after a callback failure, then
   report collected exceptions to the owning event loop. Public CORS requests retain
   source-element integrity requirements unless explicitly overridden; empty metadata
