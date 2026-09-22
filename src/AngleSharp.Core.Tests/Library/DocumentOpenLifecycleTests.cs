@@ -75,17 +75,21 @@ namespace AngleSharp.Core.Tests.Library
             Assert.AreEqual("Current", entry.QuerySelector("h1").TextContent);
         }
 
-        [Test]
-        public async Task OpeningFromABlankChildPreservesTheTargetsOrigin()
+        [TestCase(false, "about:blank")]
+        [TestCase(true, "about:srcdoc")]
+        public async Task OpeningFromAnAboutChildCopiesItsUrlWithoutCopyingItsAboutBase(bool srcdoc, string expectedUrl)
         {
             var config = Configuration.Default.WithDefaultLoader(new LoaderOptions { IsResourceLoadingEnabled = true });
             var parent = await BrowsingContext.New(config).OpenAsync(request => request
-                .Content("<base href='/assets/'><iframe></iframe>").Address("https://open.example/parent"));
+                .Content("<base href='/assets/'><iframe " + (srcdoc ? "srcdoc='<h1>Child</h1>'" : "") + "></iframe>")
+                .Address("https://open.example/parent#fragment"));
             var child = parent.QuerySelector<IHtmlInlineFrameElement>("iframe").ContentDocument;
+            Assert.AreEqual("https://open.example/assets/", child.BaseUri);
 
             ((Document)parent).OpenFrom(child);
 
-            Assert.AreEqual("about:blank", parent.Url);
+            Assert.AreEqual(expectedUrl, parent.Url);
+            Assert.AreEqual(expectedUrl, parent.BaseUri);
             Assert.AreEqual("https://open.example", parent.Origin);
             Assert.AreEqual(parent.Origin, ((IDocument)parent.Clone()).Origin);
         }
