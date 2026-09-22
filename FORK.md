@@ -7,6 +7,7 @@ prepared for discussion with upstream maintainers.
 The maintained changes cover:
 
 - DOM ownership, detached-node comparisons, dataset names, event dispatch, and mutation observation.
+- Native `Unloading` handlers subscribe to the standard `beforeunload` event name.
 - Optional parser synchronization, mutation microtask scheduling, and synchronous mutation notification services.
 - Reentrant `document.write`, script preparation and ordering, stylesheet blockers, and document readiness.
 - Frame sandbox propagation and integrity metadata captured at resource preparation.
