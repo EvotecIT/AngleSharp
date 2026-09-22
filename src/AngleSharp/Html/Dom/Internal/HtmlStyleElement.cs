@@ -16,6 +16,7 @@ namespace AngleSharp.Html.Dom
         #region Fields
 
         private IStyleSheet? _sheet;
+        private Int32 _contentReplacementDepth;
         private Boolean _parserInserted;
         private Boolean? _scriptBlockingEligible;
         private Int32 _sheetGeneration;
@@ -96,7 +97,7 @@ namespace AngleSharp.Html.Dom
         protected override void NodeIsInserted(Node newNode)
         {
             base.NodeIsInserted(newNode);
-            if (!IsReplacingAll)
+            if (_contentReplacementDepth == 0)
             {
                 UpdateSheet();
             }
@@ -105,9 +106,23 @@ namespace AngleSharp.Html.Dom
         protected override void NodeIsRemoved(Node removedNode, Node? oldPreviousSibling)
         {
             base.NodeIsRemoved(removedNode, oldPreviousSibling);
-            if (!IsReplacingAll)
+            if (_contentReplacementDepth == 0)
             {
                 UpdateSheet();
+            }
+        }
+
+        internal override void ReplaceAll(Node? node, Boolean suppressObservers)
+        {
+            _contentReplacementDepth++;
+
+            try
+            {
+                base.ReplaceAll(node, suppressObservers);
+            }
+            finally
+            {
+                _contentReplacementDepth--;
             }
         }
 
