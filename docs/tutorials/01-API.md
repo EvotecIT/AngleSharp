@@ -58,6 +58,8 @@ However, right now there are no intentions in providing an official / integrated
 
 Officially, we try to establish `AngleSharp.Js` as the solution. This is a separate project from the core, which requires high maintenance and lots of efforts. Any participation on this one would be highly appreciated.
 
+Script hosts that cache event-handler properties can subscribe to the .NET `EventTarget.OnReset` event. `RemoveEventListeners` clears native registrations and then raises the event once, allowing the host to discard its cached handlers for that target. Individual `RemoveEventListener` calls do not raise it. This is a CLR integration event, not a DOM event dispatched to scripts.
+
 ### ISpellCheckService
 
 Allows registration of individual spell-checkers. Each spell-checker is registered with its culture, making it sensitive to whatever culture the webpage or text is probably using.
