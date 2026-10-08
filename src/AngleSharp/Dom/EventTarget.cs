@@ -106,7 +106,10 @@ namespace AngleSharp.Dom
                 // a fresh snapshot for each so changes made during capture apply
                 // to the later bubble invocation, as they do along the path.
                 InvokeEventListeners(ev, true);
-                InvokeEventListeners(ev, false);
+                if ((ev.Flags & EventFlags.StopPropagation) != EventFlags.StopPropagation)
+                {
+                    InvokeEventListeners(ev, false);
+                }
             }
             else
             {

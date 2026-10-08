@@ -69,7 +69,7 @@ namespace AngleSharp.Core.Tests.Library
 
             element.Dispatch(new Event("probe", true, false));
 
-            CollectionAssert.AreEqual(immediate ? new[] { "capture" } : new[] { "capture", "second-capture", "bubble" }, calls);
+            CollectionAssert.AreEqual(immediate ? new[] { "capture" } : new[] { "capture", "second-capture" }, calls);
         }
 
         [Test]
