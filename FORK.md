@@ -55,6 +55,9 @@ overloads. This fix was accepted in
 [AngleSharp #1358](https://github.com/AngleSharp/AngleSharp/pull/1358).
 
 The released fixes and their regression cases remain in the integration fork.
+Target dispatch invokes capturing listeners before non-capturing listeners, with
+a fresh listener snapshot for each invocation. Capture-time listener changes and
+propagation flags retain their standard target semantics.
 Its document base URL state also retains the host's frame, template-content and
 document-replacement lifecycle behavior. An explicit document base override wins
 over an authored base without becoming the fallback used to freeze that base.
