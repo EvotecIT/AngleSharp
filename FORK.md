@@ -7,6 +7,16 @@ prepared for discussion with upstream maintainers.
 The maintained changes cover:
 
 - DOM ownership, detached-node comparisons, dataset names, event dispatch, and mutation observation.
+- ID and class selectors fold ASCII case in quirks-mode documents and retain case
+  sensitivity in standards mode.
+- `:lang()` resolves element and ancestor declarations, giving XML `lang` precedence
+  over HTML or SVG `lang`, ignoring unrelated attribute namespaces, and matching
+  complete language subtags rather than arbitrary string prefixes.
+- HTML 4.01 Transitional and Frameset doctypes select quirks mode when the system
+  identifier is missing or empty, and limited quirks when it is nonempty. Document
+  parsing and public doctype tokens use the same classification.
+- String and stream fragment parsing and DOM markup setters preserve the context
+  document's quirks or limited-quirks mode before constructing and adopting nodes.
 - Native `Unloading` handlers subscribe to the standard `beforeunload` event name.
 - Native listener removal notifies script hosts with the removed callback and capture
   flag, allowing them to invalidate cached handler properties after bulk removal.

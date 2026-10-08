@@ -1,13 +1,49 @@
-using AngleSharp.Text;
-using System;
-
 namespace AngleSharp.Css
 {
+    using AngleSharp.Dom;
+    using AngleSharp.Text;
+    using System;
+
     /// <summary>
     /// A set of useful CSS utilities.
     /// </summary>
     public static class CssUtilities
     {
+        internal static Boolean IsInQuirksMode(IElement element)
+        {
+            var owner = element.Owner;
+            return owner is Document document ? document.QuirksMode == QuirksMode.On : owner?.CompatMode == "BackCompat";
+        }
+
+        // Quirks-mode identity selectors fold only ASCII letters, unlike OrdinalIgnoreCase.
+        internal static Boolean EqualsAsciiIgnoreCase(String? left, String? right)
+        {
+            if (left is null || right is null)
+            {
+                return left == right;
+            }
+
+            if (left.Length != right.Length)
+            {
+                return false;
+            }
+
+            for (var i = 0; i < left.Length; i++)
+            {
+                var a = left[i];
+                var b = right[i];
+                a = a.IsUppercaseAscii() ? (Char)(a + 0x20) : a;
+                b = b.IsUppercaseAscii() ? (Char)(b + 0x20) : b;
+
+                if (a != b)
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
         /// <summary>
         /// Escapes the given string using CSS escaping rules.
         /// </summary>

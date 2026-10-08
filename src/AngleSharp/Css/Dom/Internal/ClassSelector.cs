@@ -20,15 +20,42 @@ namespace AngleSharp.Css.Dom
 
         public Boolean Match(IElement element, IElement? scope)
         {
-            // Workaround for #1252 (Android AoT issues)
             var list = element.ClassList;
+            var quirks = CssUtilities.IsInQuirksMode(element);
 
+            // Workaround for #1252 (Android AoT issues)
             if (list is TokenList concreteList)
             {
-                return concreteList.Contains(_cls);
+                if (!quirks)
+                {
+                    return concreteList.Contains(_cls);
+                }
+
+                for (var i = 0; i < concreteList.Length; i++)
+                {
+                    if (CssUtilities.EqualsAsciiIgnoreCase(concreteList[i], _cls))
+                    {
+                        return true;
+                    }
+                }
+
+                return false;
             }
 
-            return list.Contains(_cls);
+            if (!quirks)
+            {
+                return list.Contains(_cls);
+            }
+
+            for (var i = 0; i < list.Length; i++)
+            {
+                if (CssUtilities.EqualsAsciiIgnoreCase(list[i], _cls))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
     }
 }
