@@ -1,12 +1,24 @@
-# 1.8.2-evotec.1
+# 1.8.3-evotec.1
 
-Development fork.
+Development fork retaining runtime integration over the released 1.8.3 baseline.
 
 - Corrected frozen document base URLs and base href reflection across DOM mutations, adoption and cloning.
 - Corrected native Unloading subscriptions to use the beforeunload event name.
 
 - Added runtime integration services and DOM, lifecycle, sandbox, and integrity corrections; see FORK.md.
 - Preserved integrity checks for public request callers and isolated failures between mutation observer notifications.
+
+# 1.8.3
+
+Released on Wednesday, September 30 2026
+
+- Improved cancellation of queued timer callbacks (#1357) @PrzemyslawKlys
+- Improved configuration / setup performance (#1360) @PrzemyslawKlys
+- Fixed form submission ignoring sandbox restrictions (#1358) @PrzemyslawKlys
+- Fixed `<base>` elements not following frozen document base URL and tree-order mutation rules (#1355, #1362)
+- Fixed native `Unloading` handlers subscribing to `unloading` instead of `beforeunload` (#1354) @PrzemyslawKlys
+- Added `OnReset` event to inform script hosts of native listener removals (#1356) @PrzemyslawKlys
+- Added pull-based HTML serialization stream (#1361) @PrzemyslawKlys
 
 # 1.8.2
 

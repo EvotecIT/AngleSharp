@@ -2,6 +2,7 @@ namespace AngleSharp.Core.Tests.Library
 {
     using AngleSharp.Dom;
     using AngleSharp.Html.Dom;
+    using AngleSharp.Io;
     using NUnit.Framework;
     using System;
     using System.Threading.Tasks;
@@ -70,6 +71,53 @@ namespace AngleSharp.Core.Tests.Library
             Assert.AreEqual("https://example.test/start/first/", element.Href);
             element.Href = "https://[";
             Assert.AreEqual("https://[", element.Href);
+        }
+
+        [Test]
+        public async Task CloneRefreezesBaseAgainstClonedDocumentUrl()
+        {
+            var document = await OpenAsync("<base href='./assets/'>").ConfigureAwait(false);
+            ((Document)document).DocumentUrl.Href = "https://example.test/moved/page";
+            var clone = (IDocument)document.Clone(true);
+            Assert.AreEqual("https://example.test/start/assets/", document.BaseUri);
+            Assert.AreEqual("https://example.test/moved/assets/", clone.BaseUri);
+        }
+
+        [Test]
+        public async Task ExplicitBaseUrlOverrideDoesNotBecomeDocumentFallback()
+        {
+            var document = await OpenAsync("<a href='item'>Item</a>").ConfigureAwait(false);
+            ((Node)document).BaseUrl = new Url("https://example.test/assets/");
+            var element = (IHtmlBaseElement)document.CreateElement("base");
+            element.Href = "child/";
+            document.Head.AppendChild(element);
+            Assert.AreEqual("https://example.test/assets/", document.BaseUri);
+            Assert.AreEqual("https://example.test/start/child/", element.Href);
+            Assert.AreEqual("https://example.test/assets/item", ((IHtmlAnchorElement)document.QuerySelector("a")).Href);
+        }
+
+        [Test]
+        public async Task SrcDocDocumentInheritsFallbackBaseUrlFromCreator()
+        {
+            var config = Configuration.Default.WithDefaultLoader(new LoaderOptions { IsResourceLoadingEnabled = true });
+            var html = "<!doctype html><base href='https://example.test/assets/'>" +
+                "<iframe id='frame' srcdoc='<!doctype html><html><head></head><body></body></html>'></iframe>";
+            var document = await BrowsingContext.New(config).OpenAsync(response => response
+                .Address("https://example.test/start/page").Content(html)).ConfigureAwait(false);
+            var frame = document.QuerySelector<IHtmlInlineFrameElement>("#frame");
+            var child = frame.ContentDocument;
+            Assert.AreEqual("about:srcdoc", child.Url);
+            Assert.AreEqual("https://example.test/assets/", child.BaseUri);
+            var baseElement = (IHtmlBaseElement)child.CreateElement("base");
+            baseElement.SetAttribute("href", "child/");
+            child.Head.AppendChild(baseElement);
+            var anchor = (IHtmlAnchorElement)child.CreateElement("a");
+            anchor.SetAttribute("href", "item");
+            child.Body.AppendChild(anchor);
+            Assert.AreEqual("about:srcdoc", child.Url);
+            Assert.AreEqual("https://example.test/assets/child/", child.BaseUri);
+            Assert.AreEqual("https://example.test/assets/child/", baseElement.Href);
+            Assert.AreEqual("https://example.test/assets/child/item", anchor.Href);
         }
 
         [Test]
@@ -156,6 +204,29 @@ namespace AngleSharp.Core.Tests.Library
             ((Document)document).DocumentUrl.Href = "https://example.test/moved/page";
             document.QuerySelector("template").InnerHtml = content;
             Assert.AreEqual("https://example.test/start/assets/", document.BaseUri);
+        }
+
+        [Test]
+        public async Task DeepInnerHtmlSubtreeWithBaseDoesNotOverflowStack()
+        {
+            var document = await OpenAsync(String.Empty).ConfigureAwait(false);
+            var root = document.CreateElement("div");
+            var parent = (Node)root;
+
+            for (var i = 0; i < 30_000; i++)
+            {
+                var child = (Node)document.CreateElement("div");
+                parent.AddNode(child);
+                parent = child;
+            }
+
+            var baseElement = document.CreateElement("base");
+            baseElement.SetAttribute("href", "/deep/");
+            parent.AddNode((Node)baseElement);
+            document.Body.AppendChild(root);
+            Assert.AreEqual("https://example.test/deep/", document.BaseUri);
+            document.Body.InnerHtml = String.Empty;
+            Assert.AreEqual("https://example.test/start/page", document.BaseUri);
         }
     }
 }

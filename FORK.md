@@ -1,6 +1,6 @@
 # Runtime integration fork
 
-This EvotecIT fork builds on AngleSharp v1.8.2. The upstream source and license remain
+This EvotecIT fork builds on AngleSharp v1.8.3. The upstream source and license remain
 in place. OfficeIMO uses the integration branch while the patches are qualified and
 prepared for discussion with upstream maintainers.
 
@@ -38,21 +38,26 @@ Host-specific resource budgets, import maps, module resolution, navigation polic
 and rendering stay in OfficeIMO. The optional services must preserve ordinary
 AngleSharp use when no host implements them.
 
-The native beforeunload wiring is proposed in
+The native beforeunload wiring was accepted in
 [AngleSharp #1354](https://github.com/AngleSharp/AngleSharp/pull/1354), preserving
 the existing `Unloading` constant and using `BeforeUnload` for subscriptions.
-Frozen base URLs are proposed independently in
+Frozen base URLs were accepted in
 [AngleSharp #1355](https://github.com/AngleSharp/AngleSharp/pull/1355).
-The native listener-removal notification is proposed in
+The native listener-removal notification was accepted in
 [AngleSharp #1356](https://github.com/AngleSharp/AngleSharp/pull/1356).
 Queued timer callbacks recheck cancellation when executed, including window
-disposal after the delay has elapsed. This fix is proposed in
+disposal after the delay has elapsed. This fix was accepted in
 [AngleSharp #1357](https://github.com/AngleSharp/AngleSharp/pull/1357).
 
 Document form policy now inherits the browsing-context sandbox. Rejected
 submissions stop before target lookup or navigation in both asynchronous
-overloads. This fix is proposed in
+overloads. This fix was accepted in
 [AngleSharp #1358](https://github.com/AngleSharp/AngleSharp/pull/1358).
+
+The released fixes and their regression cases remain in the integration fork.
+Its document base URL state also retains the host's frame, template-content and
+document-replacement lifecycle behavior. An explicit document base override wins
+over an authored base without becoming the fallback used to freeze that base.
 
 Build and test from this repository:
 

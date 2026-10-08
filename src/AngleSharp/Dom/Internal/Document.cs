@@ -940,13 +940,12 @@ namespace AngleSharp.Dom
 
         #region Internal Properties
 
-        internal Url FallbackBaseUrl => BaseUrlOverride ??
-            (_aboutUrl is not null && (_aboutUrl.IsSrcdoc || DocumentAboutUrl.IsBlank(DocumentUrl))
+        internal Url FallbackBaseUrl => (_aboutUrl is not null && (_aboutUrl.IsSrcdoc || DocumentAboutUrl.IsBlank(DocumentUrl))
                 ? _aboutUrl.BaseUrl : DocumentUrl);
 
         internal void RegisterBaseElement() => _baseUrlState ??= new DocumentBaseUrl(this);
 
-        internal Url GetDocumentBaseUrl() => _baseUrlState?.Get() ?? FallbackBaseUrl;
+        internal Url GetDocumentBaseUrl() => BaseUrlOverride ?? _baseUrlState?.Get() ?? FallbackBaseUrl;
 
         internal void RefreshBaseUrlForSubtree(Node subtree) => _baseUrlState?.RefreshForSubtree(subtree);
 
