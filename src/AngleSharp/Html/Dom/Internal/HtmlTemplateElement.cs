@@ -32,6 +32,9 @@ namespace AngleSharp.Html.Dom
 
         internal Boolean IsStagingContent => _contentReplacementDepth != 0;
 
+        // The parser keeps children on the element until it closes the template.
+        internal Boolean IsParsingContent { get; private set; } = true;
+
         #endregion
 
         #region Methods
@@ -86,9 +89,15 @@ namespace AngleSharp.Html.Dom
 
         #region Helpers
 
+        internal override void SetupElement()
+        {
+            base.SetupElement();
+            IsParsingContent = false;
+        }
+
         protected override void ReplacedAll() => PopulateFragment();
 
-        protected override void NodeIsAdopted(Document oldDocument) => _content.Owner = oldDocument;
+        protected override void NodeIsAdopted(Document oldDocument) => _content.Owner = Owner;
 
         #endregion
     }

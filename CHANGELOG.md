@@ -1,12 +1,30 @@
-# 1.8.3-evotec.1
+# 1.8.4-evotec.1
 
-Development fork retaining runtime integration over the released 1.8.3 baseline.
+Development fork retaining runtime integration over the released 1.8.4 baseline.
 
+- Integrated the official 1.8.4 source and regressions, preserving template replacement staging and parser lifecycle hooks.
 - Corrected frozen document base URLs and base href reflection across DOM mutations, adoption and cloning.
 - Corrected native Unloading subscriptions to use the beforeunload event name.
-
 - Added runtime integration services and DOM, lifecycle, sandbox, and integrity corrections; see FORK.md.
 - Preserved integrity checks for public request callers and isolated failures between mutation observer notifications.
+
+# 1.8.4
+
+Released on Wednesday, October 7 2026
+
+- Improved selection when parsing `<select>` (#1364) @PrzemyslawKlys
+- Updated constraint validation eligibility of `fieldset` and `output` elements (breaking behavior change) (#1373) @PrzemyslawKlys
+- Fixed change of `<select>` value (`IsSelected`) (#1365) @PrzemyslawKlys
+- Fixed indeterminate input state when cloning (#1367) @PrzemyslawKlys
+- Fixed `<select>` form submission including unselected options and options in disabled groups (#1366) @PrzemyslawKlys
+- Fixed option indexes inside option groups (#1368) @PrzemyslawKlys
+- Fixed selecting an option leaving other single-select options selected (#1372) @PrzemyslawKlys
+- Fixed validity checks for controls excluded from validation (#1370) @PrzemyslawKlys
+- Fixed template content document when adopting a subtree (#1374) @PrzemyslawKlys
+- Fixed checking a radio leaving other group members checked (#1371) @PrzemyslawKlys
+- Fixed parsed radio checkedness depending on attribute order @PrzemyslawKlys
+- Fixed SVG `annotation-xml` elements being treated as HTML integration points @NotAFlightRisk
+- Fixed required radio validation across group members (#1369) @PrzemyslawKlys
 
 # 1.8.3
 

@@ -1,8 +1,15 @@
 # Runtime integration fork
 
-This EvotecIT fork builds on AngleSharp v1.8.3. The upstream source and license remain
+This EvotecIT fork builds on AngleSharp v1.8.4. The upstream source and license remain
 in place. OfficeIMO uses the integration branch while the patches are qualified and
 prepared for discussion with upstream maintainers.
+
+The released select, radio, validation, cloning, adoption and SVG parsing fixes
+are part of this source baseline. Template parsing and replacement staging keep
+their separate lifetimes, so adopted template content uses its new document
+without activating a base element while it remains inside template content.
+The inherited-language and fragment-mode corrections remain fork changes because
+their accepted upstream changes postdate the 1.8.4 release.
 
 The maintained changes cover:
 
