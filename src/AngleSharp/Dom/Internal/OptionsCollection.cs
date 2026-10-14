@@ -83,10 +83,21 @@ namespace AngleSharp.Dom
             set
             {
                 var index = 0;
+                IHtmlOptionElement? selected = null;
 
                 foreach (var option in _options)
                 {
-                    option.IsSelected = index++ == value;
+                    ((HtmlOptionElement)option).SetSelectedness(false);
+
+                    if (index++ == value)
+                    {
+                        selected = option;
+                    }
+                }
+
+                if (selected is not null)
+                {
+                    selected.IsSelected = true;
                 }
             }
         }
@@ -108,7 +119,7 @@ namespace AngleSharp.Dom
 
             if (child != null)
             {
-                _parent.ReplaceChild(value, child);
+                child.Parent!.ReplaceChild(value, child);
             }
             else
             {
@@ -118,7 +129,14 @@ namespace AngleSharp.Dom
 
         public void Add(IHtmlOptionElement element, IHtmlElement? before = null)
         {
-            _parent.InsertBefore(element, before);
+            if (before is IHtmlOptionElement && before.Parent is HtmlOptionsGroupElement group && group.Parent == _parent)
+            {
+                group.InsertBefore(element, before);
+            }
+            else
+            {
+                _parent.InsertBefore(element, before);
+            }
         }
 
         public void Add(IHtmlOptionsGroupElement element, IHtmlElement? before = null)
@@ -131,7 +149,7 @@ namespace AngleSharp.Dom
             if (index >= 0 && index < Length)
             {
                 var child = GetOptionAt(index);
-                _parent.RemoveChild(child);
+                child.Parent!.RemoveChild(child);
             }
         }
 

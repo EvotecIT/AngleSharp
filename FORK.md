@@ -10,6 +10,12 @@ their separate lifetimes, so adopted template content uses its new document
 without activating a base element while it remains inside template content.
 The inherited-language and fragment-mode corrections remain fork changes because
 their accepted upstream changes postdate the 1.8.4 release.
+Select maintenance also keeps option selectedness separate from dirtiness and
+runs normalization after option, optgroup, size and multiple mutations. Explicit
+value or index clearing remains observable until a selection-resetting mutation.
+Form reset clears dirtiness, and cloning preserves the current option state.
+These corrections cover dynamic options and default-selected changes that the
+released 1.8.4 selection fixes do not handle.
 
 The maintained changes cover:
 

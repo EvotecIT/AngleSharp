@@ -28,5 +28,45 @@ namespace AngleSharp.Core.Tests.Library
             Assert.AreEqual(selectedValues.Split(',')[0], select.Value ?? String.Empty);
             Assert.AreEqual(selectedValues.Length == 0 ? -1 : select.Options.ToList().FindIndex(option => option.IsSelected), select.SelectedIndex);
         }
+
+        [TestCase("innerHtml")]
+        [TestCase("append")]
+        [TestCase("add")]
+        [TestCase("fragment")]
+        public void PopulatingAnEmptySelectUpdatesSelectionAndSubmission(String route)
+        {
+            var document = "<form action='https://example.com/'><select name=choice></select></form>".ToHtmlDocument();
+            var select = document.QuerySelector<IHtmlSelectElement>("select");
+
+            if (route == "innerHtml")
+            {
+                select.InnerHtml = "<option value=a>A</option>";
+            }
+            else
+            {
+                var option = (IHtmlOptionElement)document.CreateElement("option");
+                option.Value = "a";
+
+                if (route == "add")
+                {
+                    select.AddOption(option);
+                }
+                else if (route == "fragment")
+                {
+                    var fragment = document.CreateDocumentFragment();
+                    fragment.AppendChild(option);
+                    select.AppendChild(fragment);
+                }
+                else
+                {
+                    select.AppendChild(option);
+                }
+            }
+
+            Assert.AreEqual("a", select.Value);
+            Assert.AreEqual(0, select.SelectedIndex);
+            Assert.AreEqual(1, select.SelectedOptions.Length);
+            Assert.AreEqual("choice=a", document.Forms[0].GetSubmission().Target.Query);
+        }
     }
 }

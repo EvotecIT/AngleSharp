@@ -3,6 +3,7 @@
 Development fork retaining runtime integration over the released 1.8.4 baseline.
 
 - Integrated the official 1.8.4 source and regressions, preserving template replacement staging and parser lifecycle hooks.
+- Corrected dynamic select normalization and option dirtiness across mutation, reset and cloning; grouped collection mutations use the option's parent.
 - Corrected frozen document base URLs and base href reflection across DOM mutations, adoption and cloning.
 - Corrected native Unloading subscriptions to use the beforeunload event name.
 - Added runtime integration services and DOM, lifecycle, sandbox, and integrity corrections; see FORK.md.

@@ -9,6 +9,47 @@ namespace AngleSharp.Core.Tests.Library
     [TestFixture]
     public class OptionSelectednessTests
     {
+        [TestCase(true)]
+        [TestCase(false)]
+        public void ImplicitlyDeselectedCleanOptionStillFollowsItsDefault(Boolean normalizeWhileParsing)
+        {
+            var document = ("<select size=2><option value=a selected>A</option>" +
+                "<option value=b" + (normalizeWhileParsing ? " selected" : "") + ">B</option></select>").ToHtmlDocument();
+            var select = document.QuerySelector<IHtmlSelectElement>("select");
+            var first = select.Options[0];
+
+            if (!normalizeWhileParsing)
+            {
+                select.Options[1].IsSelected = true;
+            }
+
+            Assert.IsFalse(first.IsSelected);
+            first.IsDefaultSelected = false;
+            first.IsDefaultSelected = true;
+
+            Assert.IsTrue(first.IsSelected);
+            Assert.IsFalse(select.Options[1].IsSelected);
+            Assert.AreEqual("a", select.Value);
+        }
+
+        [Test]
+        public void ExplicitlyDeselectedOptionIgnoresDefaultsUntilFormReset()
+        {
+            var document = "<form><select size=2><option selected>A</option><option>B</option></select></form>".ToHtmlDocument();
+            var select = document.QuerySelector<IHtmlSelectElement>("select");
+            var option = select.Options[0];
+
+            option.IsSelected = false;
+            option.IsDefaultSelected = false;
+            option.IsDefaultSelected = true;
+            Assert.IsFalse(option.IsSelected);
+
+            document.Forms[0].Reset();
+            Assert.IsTrue(option.IsSelected);
+            option.IsDefaultSelected = false;
+            Assert.IsFalse(option.IsSelected);
+        }
+
         [TestCase("", false)]
         [TestCase("multiple", true)]
         public void SelectingOptionPreservesMultipleSelectBehavior(String attributes, Boolean firstRemainsSelected)
