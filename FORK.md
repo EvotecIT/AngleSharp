@@ -14,6 +14,9 @@ Select maintenance also keeps option selectedness separate from dirtiness and
 runs normalization after option, optgroup, size and multiple mutations. Explicit
 value or index clearing remains observable until a selection-resetting mutation.
 Form reset clears dirtiness, and cloning preserves the current option state.
+Single-select state tracks its selected option. Explicit clears and owner changes
+release that reference, and registering another option does not rescan an already
+selected dropdown's existing options.
 These corrections cover dynamic options and default-selected changes that the
 released 1.8.4 selection fixes do not handle.
 Disabled attribute changes preserve current selectedness, matching AngleSharp
