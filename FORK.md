@@ -16,6 +16,10 @@ value or index clearing remains observable until a selection-resetting mutation.
 Form reset clears dirtiness, and cloning preserves the current option state.
 These corrections cover dynamic options and default-selected changes that the
 released 1.8.4 selection fixes do not handle.
+Disabled attribute changes preserve current selectedness, matching AngleSharp
+1.8.3 / 1.8.4 and the Chromium 153 control. The current HTML standard instead
+requests normalization after these changes; that standards refresh is unqualified
+and excluded from these maintenance corrections.
 
 The maintained changes cover:
 

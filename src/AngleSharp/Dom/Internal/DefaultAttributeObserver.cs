@@ -48,8 +48,6 @@ namespace AngleSharp.Dom
             RegisterObserver<HtmlSelectElement>(AttributeNames.Size, (element, _) => element.NormalizeSelectedness());
             RegisterObserver<HtmlSelectElement>(AttributeNames.Multiple, (element, _) => element.UpdateMultiple());
             RegisterObserver<HtmlOptionElement>(AttributeNames.Selected, (element, _) => element.UpdateSelectedness());
-            RegisterObserver<HtmlOptionElement>(AttributeNames.Disabled, (element, _) => element.SelectionOwner?.NormalizeSelectedness());
-            RegisterObserver<HtmlOptionsGroupElement>(AttributeNames.Disabled, (element, _) => (element.Parent as HtmlSelectElement)?.NormalizeSelectedness());
             RegisterObserver<HtmlOutputElement>(AttributeNames.For, (element, _) => element.UpdateFor());
             RegisterObserver<HtmlObjectElement>(AttributeNames.Data, (element, value) => element.UpdateSource(value));
             RegisterObserver<HtmlAudioElement>(AttributeNames.Src, (element, value) => element.UpdateSource(value));

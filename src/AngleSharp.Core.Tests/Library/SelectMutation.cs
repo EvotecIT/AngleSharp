@@ -71,6 +71,22 @@ namespace AngleSharp.Core.Tests.Library
             Assert.AreEqual(0, select.SelectedIndex);
         }
 
+        [Test]
+        public void AddingAGroupBeforeAGroupedOptionUsesTheReferenceParent()
+        {
+            var document = "<select><optgroup><option value=a>A</option></optgroup></select>".ToHtmlDocument();
+            var select = document.QuerySelector<IHtmlSelectElement>("select");
+            var reference = select.Options[0];
+            var group = (IHtmlOptionsGroupElement)document.CreateElement("optgroup");
+
+            select.AddOption(group, reference);
+
+            Assert.AreSame(reference.Parent, group.Parent);
+            Assert.AreSame(reference, group.NextSibling);
+            Assert.AreEqual("a", select.Value);
+            Assert.AreEqual(1, select.Length);
+        }
+
         [TestCase(false, false)]
         [TestCase(true, false)]
         [TestCase(true, true)]
@@ -162,7 +178,7 @@ namespace AngleSharp.Core.Tests.Library
         }
 
         [Test]
-        public void GroupOptionInsertionAndDisabledChangesResetSelection()
+        public void GroupInsertionResetsSelectionAfterDisabledChangesPreserveIt()
         {
             var document = "<select><optgroup disabled><option value=a disabled>A</option></optgroup></select>".ToHtmlDocument();
             var select = document.QuerySelector<IHtmlSelectElement>("select");
@@ -172,9 +188,8 @@ namespace AngleSharp.Core.Tests.Library
             select.Options[0].IsDisabled = false;
             Assert.AreEqual(-1, select.SelectedIndex);
             group.IsDisabled = false;
-            Assert.AreEqual("a", select.Value);
+            Assert.AreEqual(-1, select.SelectedIndex);
 
-            select.Value = "missing";
             var option = (IHtmlOptionElement)document.CreateElement("option");
             option.Value = "b";
             group.AppendChild(option);
@@ -182,6 +197,53 @@ namespace AngleSharp.Core.Tests.Library
 
             group.InnerHtml = "<option value=c>C</option>";
             Assert.AreEqual("c", select.Value);
+        }
+
+        [TestCase("value", false)]
+        [TestCase("index", true)]
+        public void DisabledChangesPreserveAnExplicitlyClearedSelection(String route, Boolean disableGroup)
+        {
+            var document = "<select><optgroup><option value=a>A</option><option value=b>B</option></optgroup></select>".ToHtmlDocument();
+            var select = document.QuerySelector<IHtmlSelectElement>("select");
+
+            if (route == "value")
+            {
+                select.Value = "missing";
+            }
+            else
+            {
+                select.Options.SelectedIndex = -1;
+            }
+
+            if (disableGroup)
+            {
+                var group = document.QuerySelector<IHtmlOptionsGroupElement>("optgroup");
+                group.IsDisabled = true;
+                group.IsDisabled = false;
+            }
+            else
+            {
+                select.Options[0].IsDisabled = true;
+                select.Options[0].IsDisabled = false;
+            }
+
+            Assert.AreEqual(-1, select.SelectedIndex);
+            Assert.IsNull(select.Value);
+            Assert.AreEqual(0, select.SelectedOptions.Length);
+        }
+
+        [Test]
+        public void EnablingAnOptionDoesNotChooseASelection()
+        {
+            var document = "<select><option value=a disabled>A</option><option value=b disabled>B</option></select>".ToHtmlDocument();
+            var select = document.QuerySelector<IHtmlSelectElement>("select");
+            Assert.AreEqual(-1, select.SelectedIndex);
+
+            select.Options[0].IsDisabled = false;
+
+            Assert.AreEqual(-1, select.SelectedIndex);
+            Assert.IsNull(select.Value);
+            Assert.AreEqual(0, select.SelectedOptions.Length);
         }
 
         [TestCase("value")]

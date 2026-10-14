@@ -79,6 +79,19 @@ namespace AngleSharp.Core.Tests.Library
         }
 
         [Test]
+        public void ClearingASoleDropdownOptionReappliesSelection()
+        {
+            var document = "<select><option value=a>A</option></select>".ToHtmlDocument();
+            var select = document.QuerySelector<IHtmlSelectElement>("select");
+
+            select.Options[0].IsSelected = false;
+
+            Assert.IsTrue(select.Options[0].IsSelected);
+            Assert.AreEqual(0, select.SelectedIndex);
+            Assert.AreEqual("a", select.Value);
+        }
+
+        [Test]
         public void SelectingOptionPreservesDefaultStateOfAnUnselectedPeer()
         {
             var document = "<select size=2><option>First</option><option>Second</option></select>".ToHtmlDocument();
